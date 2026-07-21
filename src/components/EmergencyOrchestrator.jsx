@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { AlertTriangle, Download } from 'lucide-react';
 
 /* ── Protocol steps ───────────────────────────────────────── */
 
@@ -20,17 +20,108 @@ function stepStatusIcon(status) {
   return '⏳';
 }
 
+/* ── Incident report generator ────────────────────────────── */
+
+function generateIncidentReport({ emergencyZones, riskScore, sensors, workers, permits, messages, timestamp }) {
+  const time = timestamp ? new Date(timestamp).toLocaleString('en-GB') : new Date().toLocaleString('en-GB');
+  const zoneList = (emergencyZones ?? []).join(', ') || 'N/A';
+  const affectedWorkers = (workers ?? []).filter(w => {
+    const wZone = w.zone || w.zoneId;
+    return (emergencyZones ?? []).some(z => z === wZone || `Z-${z}` === wZone);
+  });
+  const revokedPermits = (permits ?? []).filter(p => p.status === 'revoked').length;
+  const critMessages = (messages ?? []).filter(m =>
+    m?.severity === 'critical' || m?.severity === 'emergency' || m?.severity === 'danger'
+  );
+
+  const sensorReadings = (sensors ?? [])
+    .filter(s => s.currentValue > (s.warningThreshold ?? Infinity) * 0.8)
+    .map(s => `  • ${s.type ?? s.id}: ${s.currentValue?.toFixed(1)} (threshold: ${s.criticalThreshold})`)
+    .join('\n') || '  • No anomalous readings';
+
+  return `
+═══════════════════════════════════════════════════════
+        INCIDENT REPORT — ShieldAI Automated
+═══════════════════════════════════════════════════════
+
+Report Generated: ${time}
+Incident Classification: EMERGENCY RESPONSE
+Report ID: IR-${Date.now().toString(36).toUpperCase()}
+
+─── SITUATION SUMMARY ───────────────────────────────
+• Affected Zones: ${zoneList}
+• Compound Risk Score: ${Math.round((riskScore ?? 0) * 100)}%
+• Workers in Affected Zones: ${affectedWorkers.length}
+• Permits Revoked: ${revokedPermits}
+
+─── SENSOR READINGS AT TIME OF INCIDENT ─────────────
+${sensorReadings}
+
+─── WORKERS REQUIRING ACCOUNTABILITY ────────────────
+${affectedWorkers.length > 0
+  ? affectedWorkers.map(w => `  • ${w.name ?? w.id} — Zone: ${w.zone ?? w.zoneId}, PPE: ${w.ppeCompliant !== false ? '✅' : '❌'}`).join('\n')
+  : '  • No workers in affected zones'}
+
+─── AGENT ALERTS (Critical) ─────────────────────────
+${critMessages.length > 0
+  ? critMessages.slice(-5).map(m => `  [${m.agent ?? 'SYSTEM'}] ${m.text ?? m.message ?? 'Alert triggered'}`).join('\n')
+  : '  • No critical alerts logged'}
+
+─── REGULATORY COMPLIANCE ───────────────────────────
+• OSHA 29 CFR 1910.119 — PSM Emergency Response: ACTIVATED
+• EPA 40 CFR 68 — RMP Emergency Procedures: ACTIVATED
+• IS 15656:2006 — Hazardous Chemical Storage: REFERENCED
+
+─── ACTIONS TAKEN ───────────────────────────────────
+• All active permits revoked automatically
+• Energy sources isolated (LOTO procedure)
+• Emergency ventilation activated
+• Evacuation alarm sounded
+• Emergency response teams notified
+• Safe evacuation routes communicated
+• Sensor evidence trail preserved
+
+═══════════════════════════════════════════════════════
+        END OF AUTOMATED INCIDENT REPORT
+═══════════════════════════════════════════════════════
+  `.trim();
+}
+
 /* ── Main Component ───────────────────────────────────────── */
 
-function EmergencyOrchestrator({ active = false, protocol = {}, incidentReport = '' }) {
-  const [showReport, setShowReport] = useState(false);
+function EmergencyOrchestrator({
+  active = false,
+  protocol = {},
+  incidentReport: externalReport = null,
+  emergencyZones = [],
+  riskScore = 0,
+  sensors = [],
+  workers = [],
+  permits = [],
+  messages = [],
+  simulationTime = null,
+}) {
   const [stepStates, setStepStates] = useState([]);
+
+  // BUG FIX: Generate incident report from emergency state when active (not always null)
+  const incidentReport = useMemo(() => {
+    if (externalReport) return externalReport;
+    if (!active) return null;
+    return generateIncidentReport({
+      emergencyZones,
+      riskScore,
+      sensors,
+      workers,
+      permits,
+      messages,
+      timestamp: simulationTime,
+    });
+  }, [active, externalReport, emergencyZones, riskScore, sensors, workers, permits, messages, simulationTime]);
 
   /* Animate steps sequentially when activated */
   useEffect(() => {
     if (!active) {
       setStepStates([]);
-      setShowReport(false);
       return;
     }
 
@@ -72,61 +163,53 @@ function EmergencyOrchestrator({ active = false, protocol = {}, incidentReport =
 
   if (!active) return null;
 
+  const completedSteps = stepStates.filter(s => s.status === 'complete').length;
+  const progress = Math.round((completedSteps / PROTOCOL_STEPS.length) * 100);
+
   return (
     <div className="emergency-panel">
       {/* Red header */}
       <div className="emergency-header">
-        <AlertTriangle size={18} />
-        <span>⚠️ EMERGENCY PROTOCOL ACTIVATED</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <AlertTriangle size={13} />
+          EMERGENCY PROTOCOL
+        </span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', opacity: 0.85 }}>
+          {progress}% {emergencyZones.length > 0 ? `· ${emergencyZones.join(', ')}` : ''}
+        </span>
       </div>
 
       <div className="emergency-body">
-        {/* Timeline */}
+        {/* Compact 4-column step grid */}
         <div className="emergency-timeline">
           {PROTOCOL_STEPS.map((step, i) => {
             const state = stepStates[i] || { status: 'pending', timestamp: null };
             const statusCls = state.status;
-            const ts = state.timestamp
-              ? new Date(state.timestamp).toLocaleTimeString('en-GB', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })
-              : '';
-
             return (
               <div key={step.id} className={`emergency-step ${statusCls}`}>
-                <div className="step-number">{step.id}</div>
-                <div className="step-content">
-                  <div className="step-description">{step.description}</div>
-                  <div className="step-meta">
-                    <span className="step-status-icon">{stepStatusIcon(state.status)}</span>
-                    {ts && <span className="step-timestamp">{ts}</span>}
-                  </div>
-                </div>
+                <div className={`step-number ${statusCls}`}>{stepStatusIcon(state.status)}</div>
+                <div className="step-description">{step.description}</div>
               </div>
             );
           })}
         </div>
 
-        {/* Incident report toggle */}
-        {incidentReport && (
-          <>
-            <button
-              className="incident-report-toggle"
-              onClick={() => setShowReport((prev) => !prev)}
-            >
-              <FileText size={14} />
-              <span>Incident Report</span>
-              {showReport ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-
-            {showReport && (
-              <div className="incident-report-content">
-                {incidentReport}
-              </div>
-            )}
-          </>
+        {/* Download incident report */}
+        {incidentReport && progress === 100 && (
+          <button
+            className="emergency-download-btn"
+            onClick={() => {
+              const blob = new Blob([incidentReport], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `incident-report-${Date.now()}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <Download size={11} /> Download Report
+          </button>
         )}
       </div>
     </div>

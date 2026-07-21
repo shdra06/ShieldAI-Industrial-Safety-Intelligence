@@ -1,6 +1,28 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-.DS_Store
-*.local
+
+# Environment variables (contain API keys)
 .env
 .env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Vercel
+.vercel
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test sprites (local dev only)
+testsprite/

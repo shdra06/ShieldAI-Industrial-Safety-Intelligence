@@ -1,8 +1,28 @@
 {
   "name": "shieldai",
-  "private": true,
+  "private": false,
   "version": "1.0.0",
-  "description": "AI-Powered Industrial Safety Intelligence for Zero-Harm Operations",
+  "description": "AI-Powered Industrial Safety Intelligence for Zero-Harm Operations — ET AI Hackathon 2.0",
+  "author": "Shivendra Prasad <shdra06@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShivendraPrasad/ShieldAI-Industrial-Safety-Intelligence.git"
+  },
+  "homepage": "https://github.com/ShivendraPrasad/ShieldAI-Industrial-Safety-Intelligence",
+  "keywords": [
+    "industrial-safety",
+    "ai",
+    "multi-agent",
+    "gemini",
+    "tensorflow-js",
+    "react",
+    "three-js",
+    "hackathon",
+    "swiss-cheese-model",
+    "scada",
+    "iot"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,9 +30,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^2.12.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@mlc-ai/web-llm": "^0.2.84",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

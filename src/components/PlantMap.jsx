@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { EVACUATION_ROUTES } from '../data/plantLayout.js';
 
 /* ── Zone layout data ─────────────────────────────────────── */
 const ZONE_RECTS = [
@@ -18,12 +19,13 @@ const LEGEND = [
   { level: 'Emergency', cls: 'zone-emergency', color: '#DC2626' },
 ];
 
+// BUG FIX: thresholds now on 0-1 scale (risk scores are 0-1, not 0-100)
 function riskToClass(score) {
   if (score == null) return 'zone-normal';
-  if (score >= 85) return 'zone-emergency';
-  if (score >= 65) return 'zone-critical';
-  if (score >= 40) return 'zone-warning';
-  if (score >= 20) return 'zone-elevated';
+  if (score >= 0.85) return 'zone-emergency';
+  if (score >= 0.65) return 'zone-critical';
+  if (score >= 0.40) return 'zone-warning';
+  if (score >= 0.20) return 'zone-elevated';
   return 'zone-normal';
 }
 
@@ -57,7 +59,7 @@ function GridDots() {
 
 /* ── Main component ───────────────────────────────────────── */
 const PlantMap = React.memo(function PlantMap({
-  zones = {},
+  zones = [],
   workers = [],
   permits = [],
   riskScores = {},
@@ -68,7 +70,8 @@ const PlantMap = React.memo(function PlantMap({
       const score = riskScores[z.id] ?? 0;
       const cls = riskToClass(score);
       const isEmergency = cls === 'zone-emergency';
-      return { ...z, cls, isEmergency, score };
+      const isWarningOrAbove = cls === 'zone-warning' || cls === 'zone-critical' || cls === 'zone-emergency';
+      return { ...z, cls, isEmergency, isWarningOrAbove, score };
     });
   }, [riskScores]);
 
@@ -94,15 +97,80 @@ const PlantMap = React.memo(function PlantMap({
     return map;
   }, [permits]);
 
+  /* Determine emergency zone IDs for evacuation routes */
+  const emergencyZoneIds = useMemo(() => {
+    const ids = new Set();
+    zoneData.forEach(z => {
+      if (z.isEmergency) {
+        ids.add(`Z-${z.id}`);
+        ids.add(z.id);
+      }
+    });
+    return ids;
+  }, [zoneData]);
+
+  /* Filter evacuation routes for active emergency zones */
+  const activeEvacRoutes = useMemo(() => {
+    if (emergencyZoneIds.size === 0) return [];
+    return (EVACUATION_ROUTES ?? []).filter(r =>
+      emergencyZoneIds.has(r.from) || emergencyZoneIds.has(r.to)
+    );
+  }, [emergencyZoneIds]);
+
   return (
     <div className="card">
       <div className="card-header">
         <span className="card-title">Plant Overview Map</span>
-        <span className="badge badge-info">{workers.length} workers</span>
+        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+          <span className="badge badge-info">{workers.length} workers</span>
+          {emergencyZoneIds.size > 0 && (
+            <span className="badge badge-critical" style={{ animation: 'pulse-danger 1.5s ease-in-out infinite' }}>
+              🚨 EVACUATION
+            </span>
+          )}
+        </div>
       </div>
 
       <svg viewBox="0 0 820 500" className="plant-map-svg" xmlns="http://www.w3.org/2000/svg">
         <GridDots />
+
+        {/* Evacuation Routes (rendered behind zones) */}
+        {activeEvacRoutes.map((route, i) => (
+          <g key={`evac-route-${i}`}>
+            {/* Glow effect */}
+            <path
+              d={route.path}
+              fill="none"
+              stroke="rgba(220, 38, 38, 0.3)"
+              strokeWidth={8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {/* Main route line */}
+            <path
+              d={route.path}
+              fill="none"
+              stroke="#DC2626"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="8 4"
+              className="evac-route-animated"
+              markerEnd="url(#arrowhead)"
+            />
+            {/* Route label */}
+            <text
+              x={route.path.split(' ')[1]}
+              y={parseInt(route.path.split(' ')[2]) - 8}
+              className="evac-route-label"
+              fill="#DC2626"
+              fontSize="8"
+              fontWeight="600"
+            >
+              {route.label}
+            </text>
+          </g>
+        ))}
 
         {/* Zones */}
         {zoneData.map((z) => (
@@ -112,6 +180,19 @@ const PlantMap = React.memo(function PlantMap({
               rx={8} ry={8}
               className={z.cls}
             />
+            {/* Risk score indicator */}
+            {z.score > 0.2 && (
+              <text
+                x={z.x + z.w - 12} y={z.y + 20}
+                textAnchor="end"
+                fill={z.score >= 0.65 ? '#EF4444' : z.score >= 0.4 ? '#F59E0B' : '#10B981'}
+                fontSize="11"
+                fontWeight="700"
+                fontFamily="var(--font-mono)"
+              >
+                {Math.round(z.score * 100)}%
+              </text>
+            )}
             {/* Zone label */}
             <text x={z.x + 10} y={z.y + 22} className="zone-label">{z.label}</text>
             <text x={z.x + 10} y={z.y + 35} className="zone-sublabel">{z.hazard}</text>
@@ -135,6 +216,15 @@ const PlantMap = React.memo(function PlantMap({
                   x2={z.x + z.w + 18} y2={z.y + z.h / 2}
                   className="evac-arrow"
                   markerEnd="url(#arrowhead)"
+                />
+                {/* Emergency zone pulsing border */}
+                <rect
+                  x={z.x - 2} y={z.y - 2} width={z.w + 4} height={z.h + 4}
+                  rx={10} ry={10}
+                  fill="none"
+                  stroke="#DC2626"
+                  strokeWidth={2}
+                  className="emergency-zone-pulse"
                 />
               </g>
             )}

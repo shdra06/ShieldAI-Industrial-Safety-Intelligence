@@ -2,6 +2,7 @@
 // ShieldAI — Sensor Configuration
 // Defines all gas-detection, temperature, and pressure sensors across zones.
 // Thresholds are based on industrial safety standards for coke oven operations.
+// Enhanced with cascade relationships and process drift baselines.
 // ============================================================================
 
 export const SENSORS = [
@@ -16,6 +17,9 @@ export const SENSORS = [
     warningThreshold: 20,
     criticalThreshold: 40,
     currentValue: 5,
+    cascadeRelations: ['GAS-002', 'GAS-003', 'PRES-001'],
+    driftBaseline: 5,
+    driftRateThreshold: 0.5,
   },
   {
     id: 'GAS-002',
@@ -27,6 +31,9 @@ export const SENSORS = [
     warningThreshold: 50,
     criticalThreshold: 200,
     currentValue: 12,
+    cascadeRelations: ['GAS-001', 'GAS-003', 'TEMP-001'],
+    driftBaseline: 12,
+    driftRateThreshold: 2.0,
   },
   {
     id: 'GAS-003',
@@ -38,6 +45,9 @@ export const SENSORS = [
     warningThreshold: 10,
     criticalThreshold: 50,
     currentValue: 2,
+    cascadeRelations: ['GAS-001', 'GAS-002'],
+    driftBaseline: 2,
+    driftRateThreshold: 0.3,
   },
   {
     id: 'TEMP-001',
@@ -49,6 +59,9 @@ export const SENSORS = [
     warningThreshold: 1200,
     criticalThreshold: 1350,
     currentValue: 1050,
+    cascadeRelations: ['PRES-001', 'GAS-002'],
+    driftBaseline: 1050,
+    driftRateThreshold: 5.0,
   },
   {
     id: 'PRES-001',
@@ -60,6 +73,9 @@ export const SENSORS = [
     warningThreshold: 12,
     criticalThreshold: 18,
     currentValue: 5,
+    cascadeRelations: ['GAS-001', 'GAS-004', 'TEMP-001'],
+    driftBaseline: 5,
+    driftRateThreshold: 0.3,
   },
 
   // ── Zone B: Gas Mixing Station ─────────────────────────────────────────
@@ -73,6 +89,9 @@ export const SENSORS = [
     warningThreshold: 20,
     criticalThreshold: 40,
     currentValue: 7,
+    cascadeRelations: ['GAS-005', 'GAS-006', 'GAS-001'],
+    driftBaseline: 7,
+    driftRateThreshold: 0.5,
   },
   {
     id: 'GAS-005',
@@ -84,6 +103,9 @@ export const SENSORS = [
     warningThreshold: 50,
     criticalThreshold: 200,
     currentValue: 18,
+    cascadeRelations: ['GAS-004', 'GAS-006'],
+    driftBaseline: 18,
+    driftRateThreshold: 2.0,
   },
   {
     id: 'GAS-006',
@@ -95,6 +117,9 @@ export const SENSORS = [
     warningThreshold: 10,
     criticalThreshold: 50,
     currentValue: 1.5,
+    cascadeRelations: ['GAS-004', 'GAS-005'],
+    driftBaseline: 1.5,
+    driftRateThreshold: 0.3,
   },
 
   // ── Zone C: Ammonia Recovery ───────────────────────────────────────────
@@ -108,6 +133,9 @@ export const SENSORS = [
     warningThreshold: 25,
     criticalThreshold: 100,
     currentValue: 8,
+    cascadeRelations: ['GAS-008', 'GAS-009'],
+    driftBaseline: 8,
+    driftRateThreshold: 1.0,
   },
   {
     id: 'GAS-008',
@@ -119,6 +147,9 @@ export const SENSORS = [
     warningThreshold: 10,
     criticalThreshold: 50,
     currentValue: 3,
+    cascadeRelations: ['GAS-007', 'GAS-009'],
+    driftBaseline: 3,
+    driftRateThreshold: 0.3,
   },
   {
     id: 'GAS-009',
@@ -130,6 +161,9 @@ export const SENSORS = [
     warningThreshold: 50,
     criticalThreshold: 200,
     currentValue: 10,
+    cascadeRelations: ['GAS-007', 'GAS-008'],
+    driftBaseline: 10,
+    driftRateThreshold: 2.0,
   },
 
   // ── Zone D: Blast Furnace Area ─────────────────────────────────────────
@@ -143,6 +177,9 @@ export const SENSORS = [
     warningThreshold: 1700,
     criticalThreshold: 1850,
     currentValue: 1520,
+    cascadeRelations: ['PRES-002', 'GAS-010'],
+    driftBaseline: 1520,
+    driftRateThreshold: 8.0,
   },
   {
     id: 'PRES-002',
@@ -154,6 +191,9 @@ export const SENSORS = [
     warningThreshold: 4.5,
     criticalThreshold: 5.5,
     currentValue: 3.2,
+    cascadeRelations: ['TEMP-002', 'GAS-010'],
+    driftBaseline: 3.2,
+    driftRateThreshold: 0.1,
   },
   {
     id: 'GAS-010',
@@ -165,6 +205,9 @@ export const SENSORS = [
     warningThreshold: 50,
     criticalThreshold: 200,
     currentValue: 22,
+    cascadeRelations: ['TEMP-002', 'PRES-002'],
+    driftBaseline: 22,
+    driftRateThreshold: 2.0,
   },
 
   // ── Zone E: Maintenance Workshop ───────────────────────────────────────
@@ -178,5 +221,8 @@ export const SENSORS = [
     warningThreshold: 45,
     criticalThreshold: 55,
     currentValue: 32,
+    cascadeRelations: [],
+    driftBaseline: 32,
+    driftRateThreshold: 1.0,
   },
 ];

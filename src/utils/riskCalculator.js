@@ -30,15 +30,33 @@ export function calculateCompoundRisk(riskFactors) {
     return 0;
   }
 
-  let productOfComplements = 1;
+  // Calculate effective risk for each factor
+  const effectiveRisks = riskFactors
+    .map(f => {
+      const v = Math.max(0, Math.min(1, f.value));
+      const w = Math.max(0, Math.min(1, f.weight));
+      return v * w;
+    })
+    .filter(r => r > 0.01) // Ignore noise-level factors
+    .sort((a, b) => b - a); // Descending by severity
 
-  for (const factor of riskFactors) {
-    const v = Math.max(0, Math.min(1, factor.value));
-    const w = Math.max(0, Math.min(1, factor.weight));
-    productOfComplements *= (1 - w * v);
+  if (effectiveRisks.length === 0) {
+    return 0;
   }
 
-  return Math.max(0, Math.min(1, 1 - productOfComplements));
+  // Use the WORST individual factor as the base, with modest boost from
+  // additional factors. This ensures that many safe sensors never accumulate
+  // to emergency, but one truly dangerous sensor drives the score up.
+  const worst = effectiveRisks[0];
+
+  // Add diminishing contribution from additional risk factors
+  // Each subsequent factor adds at most 10% of its own risk
+  let bonus = 0;
+  for (let i = 1; i < Math.min(effectiveRisks.length, 8); i++) {
+    bonus += effectiveRisks[i] * (0.1 / i);
+  }
+
+  return Math.max(0, Math.min(1, worst + bonus));
 }
 
 /**
@@ -75,16 +93,30 @@ export function calculateSingleSensorRisk(riskFactors) {
  * @param {number} critical  - Critical threshold.
  * @returns {number} Normalized risk in [0, 1].
  */
-export function getSensorRiskLevel(value, warning, critical) {
+export function getSensorRiskLevel(value, warning, critical, normalMax) {
   if (value <= 0) return 0;
   if (value >= critical) return 1;
 
-  if (value <= warning) {
-    // Linear ramp from 0 to 0.5 over the range [0, warning]
-    return (value / warning) * 0.5;
+  // Use normalMax as the zero-risk baseline if available.
+  // Only readings ABOVE the normal operating range contribute to risk.
+  // This prevents Temperature sensors at 1520°C (normal for blast furnaces)
+  // from producing false risk of 0.45 when warning is 1700.
+  const safeMax = normalMax ?? 0;
+
+  if (value <= safeMax) {
+    // Completely within normal range — zero risk
+    return 0;
   }
 
-  // Linear ramp from 0.5 to 1.0 over the range [warning, critical]
+  if (value <= warning) {
+    // Between normalMax and warning: ramp from 0 to 0.3
+    // (reduced from 0.5 to prevent accumulation)
+    const range = warning - safeMax;
+    if (range <= 0) return 0;
+    return ((value - safeMax) / range) * 0.3;
+  }
+
+  // Between warning and critical: ramp from 0.5 to 1.0
   const range = critical - warning;
   if (range <= 0) return 1;
   return 0.5 + ((value - warning) / range) * 0.5;

@@ -199,4 +199,51 @@ export const HISTORICAL_INCIDENTS = [
     ],
     regulatoryRef: 'OISD-STD-105 Clause 5.5; Factories Act 1948 §40B',
   },
+  {
+    id: 'INC-011',
+    title: 'SMS-1 Caster-2 Molten Steel Explosion — Vizag Steel Plant',
+    date: '2026-06-08',
+    zone: 'Z-D',
+    description:
+      'A 150-tonne ladle of molten steel (1,500-1,600°C) exploded during casting operations at Caster-2 in SMS-1. ' +
+      'Entrapped gases (O₂, H₂, N₂) within the liquid steel caused sudden pressure buildup, rupturing the ladle seal ' +
+      'before the slide gate could be opened. The ladle tipped, spilling molten metal onto the working platform below, ' +
+      'engulfing workers. Massive fire damaged an overhead crane. Contributing factors included poor quality ferro-alloys ' +
+      'causing gas entrapment, unaddressed minor ladle leaks in preceding months, staff shortages forcing excessive workloads, ' +
+      'and production pressure to meet targets.',
+    rootCause: 'Entrapped gases in liquid steel; no automated gas entrapment detection in ladle; inadequate ladle integrity monitoring; staff shortages; poor raw material quality control',
+    casualties: 10,
+    severity: 'fatal',
+    keywords: ['molten steel', 'ladle explosion', 'SMS', 'caster', 'entrapped gas', 'pressure rupture', 'continuous casting', 'staff shortage', 'ferro-alloy quality', 'crane damage'],
+    preventiveMeasures: [
+      'Automated gas entrapment detection using sub-lance probes before casting',
+      'Ladle integrity monitoring system with crack/leak detection before each heat',
+      'Mandatory ladle pre-heat validation with infrared thermal imaging',
+      'Raw material quality control: reject non-conforming ferro-alloys',
+      'Minimum staffing levels enforced per IEC 61511 SIL requirements',
+      'Emergency shutdown interlock: auto-abort casting if ladle anomaly detected',
+    ],
+    regulatoryRef: 'IEC 61508/61511 SIL-2; Ministry of Steel SG-25; OISD-STD-105 Clause 8',
+  },
+  {
+    id: 'INC-012',
+    title: 'Gas Pipeline Explosion — SAIL Bhilai Coke Oven Battery 11',
+    date: '2018-10-09',
+    zone: 'Z-A',
+    description:
+      'A gas pipeline exploded during maintenance work at Coke Oven Battery Complex No. 11 at SAIL Bhilai Steel Plant. ' +
+      'Workers were performing routine maintenance on the gas pipeline when the explosion occurred. ' +
+      'Inadequate gas isolation procedures during maintenance and possible permit-to-work system failures contributed to the disaster.',
+    rootCause: 'Inadequate gas isolation during maintenance; PTW system failure; residual gas in pipeline',
+    casualties: 12,
+    severity: 'fatal',
+    keywords: ['gas pipeline', 'explosion', 'maintenance', 'coke oven', 'gas isolation', 'permit-to-work', 'SAIL', 'Bhilai'],
+    preventiveMeasures: [
+      'Double-block-and-bleed isolation for all gas pipeline maintenance',
+      'Positive isolation verification with gas-free testing at multiple points',
+      'Mandatory hot work permit with real-time gas monitoring during pipe maintenance',
+      'Lockout-Tagout (LOTO) procedure with photo verification',
+    ],
+    regulatoryRef: 'OISD-STD-105 Clause 5.4; IS 17893:2023 PTW Framework',
+  },
 ];

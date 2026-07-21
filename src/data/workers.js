@@ -1,6 +1,7 @@
 // ============================================================================
 // ShieldAI — Worker Data
-// Personnel on-site across shifts with PPE compliance status.
+// Personnel on-site across shifts with PPE compliance status, real-time
+// position data, fatigue scores, shift timing, and certification details.
 // ============================================================================
 
 export const WORKERS = [
@@ -13,6 +14,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Welding Shield', 'FR Coverall', 'Safety Boots', 'Welding Gloves', 'Gas Monitor'],
     badgeId: 'BDG-1001',
+    position: { x: 120, y: 150, z: 0 },
+    fatigueScore: 0.2,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Gas Cutting & Welding', expiresAt: '2027-01-15' },
+      { name: 'Hot Work Safety', expiresAt: '2026-12-30' },
+    ],
   },
   {
     id: 'W-002',
@@ -23,6 +31,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'Respirator', 'Chemical Suit', 'Safety Boots', 'Gas Monitor'],
     badgeId: 'BDG-1002',
+    position: { x: 130, y: 370, z: 0 },
+    fatigueScore: 0.15,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Confined Space Entry', expiresAt: '2026-11-20' },
+      { name: 'NDT Level-II', expiresAt: '2027-03-10' },
+    ],
   },
   {
     id: 'W-003',
@@ -33,6 +48,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Arc Flash Suit', 'Insulated Gloves', 'Safety Boots', 'Face Shield'],
     badgeId: 'BDG-1003',
+    position: { x: 400, y: 350, z: 0 },
+    fatigueScore: 0.3,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Electrical Competency (HV)', expiresAt: '2027-02-28' },
+      { name: 'LOTO Authorized Person', expiresAt: '2026-09-15' },
+    ],
   },
   {
     id: 'W-004',
@@ -43,6 +65,12 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'FR Coverall', 'Safety Boots', 'Gloves'],
     badgeId: 'BDG-1004',
+    position: { x: 440, y: 130, z: 0 },
+    fatigueScore: 0.25,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Mechanical Fitter Grade-I', expiresAt: '2027-06-01' },
+    ],
   },
   {
     id: 'W-005',
@@ -53,6 +81,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'FR Coverall', 'Safety Boots', 'Gas Monitor'],
     badgeId: 'BDG-1005',
+    position: { x: 200, y: 180, z: 0 },
+    fatigueScore: 0.35,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Coke Oven Operations', expiresAt: '2027-04-15' },
+      { name: 'Gas Testing', expiresAt: '2026-10-01' },
+    ],
   },
   {
     id: 'W-006',
@@ -63,6 +98,12 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Welding Shield', 'FR Coverall', 'Safety Boots', 'Welding Gloves'],
     badgeId: 'BDG-1006',
+    position: { x: 670, y: 130, z: 0 },
+    fatigueScore: 0.4,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Gas Cutting & Welding', expiresAt: '2026-08-15' },
+    ],
   },
   {
     id: 'W-007',
@@ -73,6 +114,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Shoes'],
     badgeId: 'BDG-1007',
+    position: { x: 680, y: 370, z: 0 },
+    fatigueScore: 0.1,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'SCADA Operations', expiresAt: '2027-07-01' },
+      { name: 'Emergency Response Coordinator', expiresAt: '2026-12-15' },
+    ],
   },
   {
     id: 'W-008',
@@ -83,6 +131,12 @@ export const WORKERS = [
     ppeCompliant: false,
     ppeItems: ['Hard Hat', 'Safety Boots'],
     badgeId: 'BDG-1008',
+    position: { x: 250, y: 200, z: 0 },
+    fatigueScore: 0.5,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Basic Safety Induction', expiresAt: '2026-07-01' },
+    ],
   },
   {
     id: 'W-009',
@@ -93,6 +147,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'Heat-Resistant Jacket', 'Safety Boots', 'Gas Monitor'],
     badgeId: 'BDG-1009',
+    position: { x: 450, y: 380, z: 0 },
+    fatigueScore: 0.15,
+    shiftStartTime: '2026-07-09T14:00:00+05:30',
+    certifications: [
+      { name: 'Shift Supervisor Competency', expiresAt: '2027-05-20' },
+      { name: 'First Aid Advanced', expiresAt: '2026-11-30' },
+    ],
   },
   {
     id: 'W-010',
@@ -103,6 +164,12 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'FR Coverall', 'Safety Boots', 'Gas Monitor'],
     badgeId: 'BDG-1010',
+    position: { x: 420, y: 160, z: 0 },
+    fatigueScore: 0.1,
+    shiftStartTime: '2026-07-09T14:00:00+05:30',
+    certifications: [
+      { name: 'Gas Mixing Operations', expiresAt: '2027-01-30' },
+    ],
   },
   {
     id: 'W-011',
@@ -113,6 +180,12 @@ export const WORKERS = [
     ppeCompliant: false,
     ppeItems: ['Hard Hat', 'Safety Boots'],
     badgeId: 'BDG-1011',
+    position: { x: 160, y: 400, z: 0 },
+    fatigueScore: 0.45,
+    shiftStartTime: '2026-07-09T14:00:00+05:30',
+    certifications: [
+      { name: 'Ammonia Handling', expiresAt: '2026-06-15' },
+    ],
   },
   {
     id: 'W-012',
@@ -123,6 +196,14 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Goggles', 'FR Coverall', 'Safety Boots', 'Gas Monitor', 'Rescue Kit'],
     badgeId: 'BDG-1012',
+    position: { x: 180, y: 130, z: 0 },
+    fatigueScore: 0.2,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'NEBOSH IGC', expiresAt: '2027-08-01' },
+      { name: 'Fire & Safety Diploma', expiresAt: '2028-01-01' },
+      { name: 'Incident Investigation', expiresAt: '2027-03-15' },
+    ],
   },
   {
     id: 'W-013',
@@ -133,6 +214,12 @@ export const WORKERS = [
     ppeCompliant: false,
     ppeItems: ['Hard Hat'],
     badgeId: 'BDG-1013',
+    position: { x: 370, y: 400, z: 0 },
+    fatigueScore: 0.6,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Basic Safety Induction', expiresAt: '2026-05-01' },
+    ],
   },
   {
     id: 'W-014',
@@ -143,6 +230,13 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'Safety Harness', 'Safety Boots', 'Hi-Vis Vest'],
     badgeId: 'BDG-1014',
+    position: { x: 650, y: 160, z: 5 },
+    fatigueScore: 0.35,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Crane Operator License', expiresAt: '2027-02-01' },
+      { name: 'Rigging & Slinging', expiresAt: '2026-10-15' },
+    ],
   },
   {
     id: 'W-015',
@@ -153,5 +247,12 @@ export const WORKERS = [
     ppeCompliant: true,
     ppeItems: ['Hard Hat', 'FR Coverall', 'Safety Boots', 'Fire Extinguisher', 'Gas Monitor'],
     badgeId: 'BDG-1015',
+    position: { x: 140, y: 170, z: 0 },
+    fatigueScore: 0.3,
+    shiftStartTime: '2026-07-09T06:00:00+05:30',
+    certifications: [
+      { name: 'Fire Watch Certified', expiresAt: '2027-01-01' },
+      { name: 'First Aid Basic', expiresAt: '2026-09-30' },
+    ],
   },
 ];
