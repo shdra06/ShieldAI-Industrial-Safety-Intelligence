@@ -531,7 +531,20 @@ Think step-by-step about cause and effect.`,
     // ══════════════════════════════════════════════════════════════════
     // FINAL RISK CALCULATION
     // ══════════════════════════════════════════════════════════════════
-    const riskScore = calculateCompoundRisk(allRiskFactors);
+    // PRIMARY: Only SCADA agent factors drive the headline risk.
+    // SCADA factors come directly from sensor readings via getSensorRiskLevel.
+    // All other agents (compliance, permits, fatigue, vision, etc.) are
+    // supplementary — they should NEVER trigger EMERGENCY by themselves.
+    const scadaRiskFactors = scadaResult.riskFactors || [];
+    const nonScadaFactors = allRiskFactors.filter(f => !scadaRiskFactors.includes(f));
+
+    const sensorRisk = calculateCompoundRisk(scadaRiskFactors);
+    const supplementaryRisk = calculateCompoundRisk(nonScadaFactors);
+    // Sensor risk dominates; supplementary factors ONLY contribute when sensors show risk.
+    // When all sensors are safe (sensorRisk ≈ 0), total risk should be 0.
+    const riskScore = sensorRisk < 0.01
+      ? 0  // All sensors safe → risk is genuinely zero
+      : Math.min(1, sensorRisk + supplementaryRisk * 0.10);
     const riskLabel = getRiskLabel(riskScore);
     const status = this._getStatus(riskScore);
 
@@ -639,6 +652,15 @@ Think step-by-step about cause and effect.`,
       (a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4),
     );
 
+    // ── Deduplicate messages: keep only one per agent+severity per tick ──
+    const seen = new Set();
+    const dedupedMessages = allMessages.filter(msg => {
+      const key = `${msg.agent}|${msg.severity}|${(msg.sensorId || '')}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     // Recompute status/label with final risk (may be overridden by safety sandwich)
     const finalStatus = this._getStatus(finalRiskScore);
     const finalRiskLabel = getRiskLabel(finalRiskScore);
@@ -648,7 +670,7 @@ Think step-by-step about cause and effect.`,
       singleSensorRisk,
       status: finalStatus,
       riskLabel: finalRiskLabel,
-      messages: allMessages,
+      messages: dedupedMessages,
       agentResults,
       emergencyProtocol: emergencyResult.protocol || null,
       incidentReport: emergencyResult.incidentReport || null,

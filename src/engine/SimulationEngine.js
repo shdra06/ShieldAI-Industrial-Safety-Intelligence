@@ -197,9 +197,11 @@ export class SimulationEngine {
     const sensor = this.sensors.find((s) => s.id === sensorId);
     if (!sensor) return;
     sensor.currentValue = newValue;
-    // Pin this sensor: skip noise for 10 ticks
+    // Store the manual target so noise drifts around this value
+    sensor._manualTarget = newValue;
+    // Pin this sensor: skip noise for 5 ticks so slider feels responsive
     if (!this._manualPins) this._manualPins = {};
-    this._manualPins[sensorId] = 10;
+    this._manualPins[sensorId] = 5;
     // Immediately re-emit so UI updates
     this._emitState();
   }
@@ -627,30 +629,39 @@ export class SimulationEngine {
   _addSensorNoise() {
     const isNormal = (this.scenario?.id === 'normal');
     for (const sensor of this.sensors) {
-      // Skip noise for manually-pinned sensors
+      // Skip noise for manually-pinned sensors (short lock after manual override)
       if (this._manualPins?.[sensor.id] > 0) {
         this._manualPins[sensor.id]--;
         continue;
       }
 
       const seed = this._hashCode(`${sensor.id}-${this.simulationClock}`);
-      const noiseFraction = ((seed % 100) - 50) / 500;
       const range = sensor.normalRange.max - sensor.normalRange.min;
-      const noise = noiseFraction * range;
 
-      // Mean-revert: pull toward driftBaseline to prevent accumulation
-      const baseline = sensor.driftBaseline ?? sensor.normalRange.min + range * 0.5;
-      const reversion = (baseline - sensor.currentValue) * 0.05;
-
-      sensor.currentValue = Math.max(0, sensor.currentValue + noise + reversion);
-      sensor.currentValue = Math.round(sensor.currentValue * 100) / 100;
-
-      // In Normal scenario, clamp to normal range to prevent false alarms
       if (isNormal) {
-        sensor.currentValue = Math.max(
-          sensor.normalRange.min,
-          Math.min(sensor.normalRange.max, sensor.currentValue)
-        );
+        // In Normal mode: gentle visible fluctuation around current value
+        // Sensors drift naturally ±1.5% of range, with occasional larger bumps
+        const baseNoise = ((seed % 100) - 50) / 3333 * range; // ±1.5% of range
+        // Occasional larger micro-fluctuation every ~20 ticks
+        const bigBump = (seed % 20 === 0) ? ((seed % 200 - 100) / 3333 * range) : 0;
+        const noise = baseNoise + bigBump;
+
+        // Gentle reversion toward a safe baseline (very slow, so manual values persist)
+        const baseline = sensor._manualTarget ?? sensor.driftBaseline ?? sensor.normalRange.min + range * 0.3;
+        const reversion = (baseline - sensor.currentValue) * 0.02; // Very gentle pull
+
+        sensor.currentValue = Math.max(0, sensor.currentValue + noise + reversion);
+        sensor.currentValue = Math.round(sensor.currentValue * 100) / 100;
+        // Only clamp to prevent negative values, allow user-set values above normal range
+        sensor.currentValue = Math.max(0, sensor.currentValue);
+      } else {
+        // In scenario modes: normal noise for drama
+        const noiseFraction = ((seed % 100) - 50) / 500;
+        const noise = noiseFraction * range;
+        const baseline = sensor.driftBaseline ?? sensor.normalRange.min + range * 0.5;
+        const reversion = (baseline - sensor.currentValue) * 0.05;
+        sensor.currentValue = Math.max(0, sensor.currentValue + noise + reversion);
+        sensor.currentValue = Math.round(sensor.currentValue * 100) / 100;
       }
     }
   }
@@ -661,6 +672,8 @@ export class SimulationEngine {
    */
   _runDigitalTwin() {
     if (!this.digitalTwin) return;
+    // In normal mode, skip physics blending to keep sensors rock-stable
+    if (this.scenario?.id === 'normal') return;
     try {
       // Build current state map from sensors
       const currentState = {};

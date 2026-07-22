@@ -10,10 +10,10 @@ const SCENARIOS = [
 ];
 
 function getRiskColor(score) {
-  if (score >= 75) return 'var(--accent-critical, #DC2626)';
-  if (score >= 50) return 'var(--accent-danger, #EF4444)';
-  if (score >= 30) return 'var(--accent-warning, #F59E0B)';
-  return 'var(--accent-safe, #10B981)';
+  if (score >= 75) return '#B91C1C';
+  if (score >= 50) return '#DC2626';
+  if (score >= 30) return '#D97706';
+  return '#059669';
 }
 
 function getStatusInfo(status, riskScore = 0) {

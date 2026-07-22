@@ -3,6 +3,9 @@
 // Defines all gas-detection, temperature, and pressure sensors across zones.
 // Thresholds are based on industrial safety standards for coke oven operations.
 // Enhanced with cascade relationships and process drift baselines.
+//
+// DEFAULT VALUES: All sensors start at SAFE levels (well below warning).
+// The user manually adjusts readings via sliders to test AI agent response.
 // ============================================================================
 
 export const SENSORS = [
@@ -16,9 +19,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 10 },
     warningThreshold: 20,
     criticalThreshold: 40,
-    currentValue: 5,
+    currentValue: 2,
     cascadeRelations: ['GAS-002', 'GAS-003', 'PRES-001'],
-    driftBaseline: 5,
+    driftBaseline: 2,
     driftRateThreshold: 0.5,
   },
   {
@@ -30,9 +33,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 25 },
     warningThreshold: 50,
     criticalThreshold: 200,
-    currentValue: 12,
+    currentValue: 5,
     cascadeRelations: ['GAS-001', 'GAS-003', 'TEMP-001'],
-    driftBaseline: 12,
+    driftBaseline: 5,
     driftRateThreshold: 2.0,
   },
   {
@@ -44,9 +47,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 5 },
     warningThreshold: 10,
     criticalThreshold: 50,
-    currentValue: 2,
+    currentValue: 0.5,
     cascadeRelations: ['GAS-001', 'GAS-002'],
-    driftBaseline: 2,
+    driftBaseline: 0.5,
     driftRateThreshold: 0.3,
   },
   {
@@ -58,9 +61,9 @@ export const SENSORS = [
     normalRange: { min: 900, max: 1100 },
     warningThreshold: 1200,
     criticalThreshold: 1350,
-    currentValue: 1050,
+    currentValue: 980,
     cascadeRelations: ['PRES-001', 'GAS-002'],
-    driftBaseline: 1050,
+    driftBaseline: 980,
     driftRateThreshold: 5.0,
   },
   {
@@ -72,9 +75,9 @@ export const SENSORS = [
     normalRange: { min: 2, max: 8 },
     warningThreshold: 12,
     criticalThreshold: 18,
-    currentValue: 5,
+    currentValue: 4,
     cascadeRelations: ['GAS-001', 'GAS-004', 'TEMP-001'],
-    driftBaseline: 5,
+    driftBaseline: 4,
     driftRateThreshold: 0.3,
   },
 
@@ -88,9 +91,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 10 },
     warningThreshold: 20,
     criticalThreshold: 40,
-    currentValue: 7,
+    currentValue: 3,
     cascadeRelations: ['GAS-005', 'GAS-006', 'GAS-001'],
-    driftBaseline: 7,
+    driftBaseline: 3,
     driftRateThreshold: 0.5,
   },
   {
@@ -102,9 +105,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 25 },
     warningThreshold: 50,
     criticalThreshold: 200,
-    currentValue: 18,
+    currentValue: 8,
     cascadeRelations: ['GAS-004', 'GAS-006'],
-    driftBaseline: 18,
+    driftBaseline: 8,
     driftRateThreshold: 2.0,
   },
   {
@@ -116,9 +119,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 5 },
     warningThreshold: 10,
     criticalThreshold: 50,
-    currentValue: 1.5,
+    currentValue: 0.3,
     cascadeRelations: ['GAS-004', 'GAS-005'],
-    driftBaseline: 1.5,
+    driftBaseline: 0.3,
     driftRateThreshold: 0.3,
   },
 
@@ -132,9 +135,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 15 },
     warningThreshold: 25,
     criticalThreshold: 100,
-    currentValue: 8,
+    currentValue: 4,
     cascadeRelations: ['GAS-008', 'GAS-009'],
-    driftBaseline: 8,
+    driftBaseline: 4,
     driftRateThreshold: 1.0,
   },
   {
@@ -146,9 +149,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 5 },
     warningThreshold: 10,
     criticalThreshold: 50,
-    currentValue: 3,
+    currentValue: 0.8,
     cascadeRelations: ['GAS-007', 'GAS-009'],
-    driftBaseline: 3,
+    driftBaseline: 0.8,
     driftRateThreshold: 0.3,
   },
   {
@@ -160,9 +163,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 25 },
     warningThreshold: 50,
     criticalThreshold: 200,
-    currentValue: 10,
+    currentValue: 6,
     cascadeRelations: ['GAS-007', 'GAS-008'],
-    driftBaseline: 10,
+    driftBaseline: 6,
     driftRateThreshold: 2.0,
   },
 
@@ -176,9 +179,9 @@ export const SENSORS = [
     normalRange: { min: 1400, max: 1600 },
     warningThreshold: 1700,
     criticalThreshold: 1850,
-    currentValue: 1520,
+    currentValue: 1450,
     cascadeRelations: ['PRES-002', 'GAS-010'],
-    driftBaseline: 1520,
+    driftBaseline: 1450,
     driftRateThreshold: 8.0,
   },
   {
@@ -190,9 +193,9 @@ export const SENSORS = [
     normalRange: { min: 2.5, max: 4.0 },
     warningThreshold: 4.5,
     criticalThreshold: 5.5,
-    currentValue: 3.2,
+    currentValue: 2.8,
     cascadeRelations: ['TEMP-002', 'GAS-010'],
-    driftBaseline: 3.2,
+    driftBaseline: 2.8,
     driftRateThreshold: 0.1,
   },
   {
@@ -204,9 +207,9 @@ export const SENSORS = [
     normalRange: { min: 0, max: 30 },
     warningThreshold: 50,
     criticalThreshold: 200,
-    currentValue: 22,
+    currentValue: 10,
     cascadeRelations: ['TEMP-002', 'PRES-002'],
-    driftBaseline: 22,
+    driftBaseline: 10,
     driftRateThreshold: 2.0,
   },
 
@@ -220,9 +223,9 @@ export const SENSORS = [
     normalRange: { min: 20, max: 40 },
     warningThreshold: 45,
     criticalThreshold: 55,
-    currentValue: 32,
+    currentValue: 28,
     cascadeRelations: [],
-    driftBaseline: 32,
+    driftBaseline: 28,
     driftRateThreshold: 1.0,
   },
 ];

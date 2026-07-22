@@ -98,6 +98,17 @@ export default function App() {
     }
   }, []);
 
+  // ── Auto-reset to normal after scenario completes ────────────────────────
+  const scenarioComplete = simState?.scenarioComplete ?? false;
+  useEffect(() => {
+    if (scenarioComplete && scenario !== 'normal') {
+      const timer = setTimeout(() => {
+        handleScenarioChange('normal');
+      }, 8000); // Wait 8 seconds after demo ends, then reset
+      return () => clearTimeout(timer);
+    }
+  }, [scenarioComplete, scenario, handleScenarioChange]);
+
   // ── Sensor override handler (from 3D control panel) ─────────────────────
   const handleSensorOverride = useCallback((sensorId, newValue) => {
     if (engineRef.current) {

@@ -668,23 +668,42 @@ Think step-by-step. Reference specific sensor values and thresholds. Be concise 
     escalationLevel,
     conflictCount,
   }) {
-    const parts = [
-      `Situation: ${situationClass} | Escalation Level: ${escalationLevel}/4`,
-      `Aggregated Risk: ${(aggregatedRisk * 100).toFixed(1)}% | Consensus: ${(agentAgreement * 100).toFixed(0)}%`,
-      `Active Agents: ${activeAgentCount}/${AGENT_KEYS.length} | Messages This Tick: ${totalMessages}`,
-    ];
+    const riskPct = (aggregatedRisk * 100).toFixed(1);
+    const consensusPct = (agentAgreement * 100).toFixed(0);
+
+    // Build contextual header based on situation
+    const headers = {
+      'Normal Operations': `✅ All systems nominal. ${activeAgentCount} agents active, ${consensusPct}% consensus.`,
+      'Elevated Monitoring': `⚠️ Elevated risk detected (${riskPct}%). ${activeAgentCount} agents monitoring. ${totalMessages} alerts this cycle.`,
+      'Developing Incident': `🔶 Developing incident — Risk: ${riskPct}% | Escalation: L${escalationLevel}/4 | ${totalMessages} alerts from ${activeAgentCount} agents.`,
+      'Active Emergency': `🚨 EMERGENCY — Risk: ${riskPct}% | All ${activeAgentCount} agents engaged | ${emergencyAgents.length} agents in emergency state.`,
+    };
+
+    const parts = [headers[situationClass] || `Situation: ${situationClass} | Risk: ${riskPct}%`];
 
     if (emergencyAgents.length > 0) {
-      parts.push(`EMERGENCY agents: ${emergencyAgents.join(', ')}`);
+      parts.push(`Emergency agents: ${emergencyAgents.map(a => a.toUpperCase()).join(', ')}`);
     }
-    if (criticalAgents.length > 0) {
-      parts.push(`Critical agents: ${criticalAgents.join(', ')}`);
+    if (criticalAgents.length > 0 && emergencyAgents.length === 0) {
+      parts.push(`Critical: ${criticalAgents.join(', ')} reporting high-severity findings`);
     }
     if (conflictCount > 0) {
-      parts.push(`Conflicts resolved: ${conflictCount}`);
+      parts.push(`${conflictCount} inter-agent conflict${conflictCount > 1 ? 's' : ''} resolved via confidence weighting`);
+    }
+    if (agentAgreement < 0.5) {
+      parts.push(`⚠ Low consensus (${consensusPct}%) — agents disagree on risk assessment`);
     }
 
-    return parts.join(' | ');
+    // Add recommendation based on situation
+    if (situationClass === 'Active Emergency') {
+      parts.push('Action: Autonomous emergency protocol executing. Verify permit revocations and evacuation routes.');
+    } else if (situationClass === 'Developing Incident') {
+      parts.push('Action: Monitor Cascade and Predictive agents for escalation. Prepare for emergency protocol standby.');
+    } else if (situationClass === 'Elevated Monitoring') {
+      parts.push('Action: Increased monitoring frequency. SCADA trending active.');
+    }
+
+    return parts.join('\n');
   }
 }
 

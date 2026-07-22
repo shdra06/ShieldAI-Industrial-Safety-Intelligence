@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 const Scene3D = lazy(() => import('./Scene3D.jsx').catch(() => ({
-  default: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: '12px' }}>3D scene failed to load. Try refreshing.</div>
+  default: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5A6376', fontSize: '12px' }}>3D scene failed to load. Try refreshing.</div>
 })));
 
 const AGENTS = [
@@ -18,10 +18,55 @@ const AGENTS = [
 
 const TYPE_ICONS = { CH4: '🔥', CO: '💨', H2S: '☠️', NH3: '🧪', Temperature: '🌡️', Pressure: '⏲️' };
 
+// ── Which agents consume each sensor type's data ─────────────────────────────
+const SENSOR_AGENTS = {
+  CH4:         [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'cascade', name: 'Cascade', icon: '🔗', color: '#ec4899' },
+    { id: 'predictive', name: 'Predict', icon: '📈', color: '#f59e0b' },
+    { id: 'emergency', name: 'Emergency', icon: '🚨', color: '#ef4444' },
+    { id: 'evacuation', name: 'Evac', icon: '🚷', color: '#f97316' },
+  ],
+  CO:          [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'cascade', name: 'Cascade', icon: '🔗', color: '#ec4899' },
+    { id: 'compliance', name: 'Comply', icon: '⚖️', color: '#a78bfa' },
+    { id: 'environmental', name: 'Environ', icon: '🌿', color: '#22c55e' },
+    { id: 'predictive', name: 'Predict', icon: '📈', color: '#f59e0b' },
+  ],
+  H2S:         [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'emergency', name: 'Emergency', icon: '🚨', color: '#ef4444' },
+    { id: 'evacuation', name: 'Evac', icon: '🚷', color: '#f97316' },
+    { id: 'compliance', name: 'Comply', icon: '⚖️', color: '#a78bfa' },
+    { id: 'resource', name: 'Resource', icon: '👷', color: '#06b6d4' },
+  ],
+  NH3:         [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'environmental', name: 'Environ', icon: '🌿', color: '#22c55e' },
+    { id: 'compliance', name: 'Comply', icon: '⚖️', color: '#a78bfa' },
+    { id: 'predictive', name: 'Predict', icon: '📈', color: '#f59e0b' },
+  ],
+  Temperature: [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'cascade', name: 'Cascade', icon: '🔗', color: '#ec4899' },
+    { id: 'maintenance', name: 'Maint', icon: '🔧', color: '#f97316' },
+    { id: 'predictive', name: 'Predict', icon: '📈', color: '#f59e0b' },
+    { id: 'digital_twin', name: 'DigiTwin', icon: '🏭', color: '#8b5cf6' },
+  ],
+  Pressure:    [
+    { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa' },
+    { id: 'cascade', name: 'Cascade', icon: '🔗', color: '#ec4899' },
+    { id: 'maintenance', name: 'Maint', icon: '🔧', color: '#f97316' },
+    { id: 'emergency', name: 'Emergency', icon: '🚨', color: '#ef4444' },
+    { id: 'digital_twin', name: 'DigiTwin', icon: '🏭', color: '#8b5cf6' },
+  ],
+};
+
 function getColor(s) {
-  if (!s) return '#334155';
+  if (!s) return '#9CA3AF';
   const r = s.currentValue / (s.criticalThreshold || 100);
-  return r >= 1 ? '#ef4444' : r >= 0.5 ? '#f59e0b' : '#10b981';
+  return r >= 1 ? '#DC2626' : r >= 0.5 ? '#D97706' : '#059669';
 }
 
 // ── Cinema Scenarios — each scenario has its own fast-paced story ────────────
@@ -140,8 +185,16 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
   const [isEmergency, setIsEmergency] = useState(false);
   const [narration, setNarration] = useState('');
   const [highlightSensor, setHighlightSensor] = useState(null);
-  const [activityLog, setActivityLog] = useState([]);
+  const [activityLog, setActivityLogRaw] = useState([]);
+  // Cap log at 50 entries to prevent memory leak
+  const setActivityLog = useCallback((updater) => {
+    setActivityLogRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return Array.isArray(next) ? next.slice(-50) : next;
+    });
+  }, []);
   const [warningCount, setWarningCount] = useState(0);
+  const [expandedOutput, setExpandedOutput] = useState(null);
   const timersRef = useRef([]);
   const logEndRef = useRef(null);
   const prevScenarioRef = useRef(scenarioKey);
@@ -171,10 +224,7 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
     }
   }, [scenarioKey, activeSteps]);
 
-  // Auto-scroll log
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activityLog]);
+  // No auto-scroll — newest entries rendered at top instead
 
   // ── Cinematic auto-play (uses activeSteps from scenario) ─────────────────
   useEffect(() => {
@@ -207,11 +257,173 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
     return () => timersRef.current.forEach(t => clearTimeout(t));
   }, [cinemaActive, activeSteps, onOverride]);
 
+  // ── Reactive AI Pipeline — triggers visual agent flow when sensor is manually changed ──
+  const reactiveTimersRef = useRef([]);
+
   const handleManualOverride = useCallback((id, val) => {
     setCinemaActive(false);
     timersRef.current.forEach(t => clearTimeout(t));
+    // Clear any previous reactive animation
+    reactiveTimersRef.current.forEach(t => clearTimeout(t));
+    reactiveTimersRef.current = [];
+
     onOverride?.(id, val);
-  }, [onOverride]);
+
+    // Find the sensor to determine severity
+    const sensor = sensors.find(s => s.id === id);
+    if (!sensor) return;
+
+    const isCrit = val >= sensor.criticalThreshold;
+    const isWarn = val >= sensor.warningThreshold;
+    const isElevated = val >= sensor.warningThreshold * 0.6;
+    const sensorLabel = `${sensor.label || sensor.type} (${sensor.id})`;
+    const connectedAgents = SENSOR_AGENTS[sensor.type] || [];
+
+    // If reading is low/safe, show agents acknowledging the safe reading
+    if (!isElevated) {
+      const now = new Date();
+      setHighlightSensor(id);
+      setHighlightAgent('scada');
+      setActiveFlow({ from: 'sensor', to: 'scada' });
+      setActivityLog(prev => [...prev, {
+        agent: '📡 SCADA', severity: 'info', time: now, sensorId: id,
+        text: `✅ ${sensorLabel} reset to safe: ${val.toFixed(1)} ${sensor.unit}. Below all thresholds.`,
+      }]);
+
+      const t1 = setTimeout(() => {
+        setHighlightAgent('supervisor');
+        setActiveFlow({ from: 'scada', to: 'supervisor' });
+        setActivityLog(prev => [...prev, {
+          agent: '🧠 Supervisor', severity: 'info', time: now,
+          text: `${sensorLabel} confirmed safe. Updating risk assessment — monitoring continues.`,
+        }]);
+      }, 1200);
+
+      const t2 = setTimeout(() => {
+        setHighlightAgent(null);
+        setActiveFlow(null);
+        setHighlightSensor(null);
+        setIsEmergency(false);
+      }, 2500);
+
+      reactiveTimersRef.current.push(t1, t2);
+      setWarningCount(prev => Math.max(0, prev - 1));
+      return;
+    }
+
+    // ── Build reactive animation sequence ──
+    const steps = [];
+    const now = new Date();
+
+    // Step 1: SCADA detects the reading (with dedup — skip if same sensor+severity logged recently)
+    steps.push({ delay: 0, action: () => {
+      setHighlightSensor(id);
+      setHighlightAgent('scada');
+      setActiveFlow({ from: 'sensor', to: 'scada' });
+      setActivityLog(prev => {
+        const recentSame = prev.filter(e => e.agent === '📡 SCADA' && e.sensorId === id && (now - e.time) < 15000);
+        if (recentSame.length > 0 && recentSame[recentSame.length - 1].severityBand === (isCrit ? 'critical' : isWarn ? 'warning' : 'info')) {
+          return prev; // Skip duplicate
+        }
+        return [...prev, {
+          agent: '📡 SCADA', severity: isWarn ? 'warning' : 'info', time: now, sensorId: id,
+          severityBand: isCrit ? 'critical' : isWarn ? 'warning' : 'info',
+          text: `${sensorLabel}: ${val.toFixed(1)} ${sensor.unit}. ${isCrit ? 'CRITICAL — exceeds threshold (' + sensor.criticalThreshold + ')!' : isWarn ? 'WARNING — above threshold (' + sensor.warningThreshold + ').' : 'Elevated — approaching warning range.'}`,
+        }];
+      });
+      setWarningCount(prev => prev + 1);
+    }});
+
+    // Step 2: Data flows to Supervisor
+    steps.push({ delay: 1200, action: () => {
+      setHighlightAgent('supervisor');
+      setActiveFlow({ from: 'scada', to: 'supervisor' });
+      setActivityLog(prev => [...prev, {
+        agent: '🧠 Supervisor', severity: isCrit ? 'danger' : 'warning', time: now,
+        text: `Received ${isCrit ? 'CRITICAL' : isWarn ? 'WARNING' : 'elevated'} alert from SCADA for ${sensorLabel}. Activating ${connectedAgents.map(a => a.name).join(', ')} for cross-analysis.`,
+      }]);
+    }});
+
+    // Step 2.5: RAG Knowledge Retrieval
+    const ragDocs = {
+      CH4: { reg: 'OISD-116 §4.2.3', rule: 'Methane LEL limits: Warning at 10% LEL, Critical at 20% LEL. Mandatory gas-free certification required above 25% LEL.', src: 'DGMS Circular 3/2019' },
+      CO: { reg: 'OISD-144 §6.1', rule: 'CO exposure limit: 35 ppm (8hr TWA), 200 ppm (ceiling). Immediate evacuation above 100 ppm per DGMS Tech Circular.', src: 'PESO Act Schedule-III' },
+      H2S: { reg: 'OISD-116 §5.3.1', rule: 'H2S threshold: 10 ppm (TWA), 15 ppm (STEL). Toxic gas alarm at 5 ppm. Full-face respirator mandatory above 10 ppm.', src: 'IS 5780:2023' },
+      NH3: { reg: 'OISD-163 §3.4', rule: 'Ammonia: 25 ppm (TWA), 35 ppm (STEL). Vapor cloud dispersion modeling required above 50 ppm leak.', src: 'DGMS Safety Manual Ch-12' },
+      Temperature: { reg: 'OISD-117 §7.2', rule: 'Process temperature limits per equipment design code. Thermal runaway protocol activates at 105% of design temperature.', src: 'ASME B31.3 / IBR Schedule-II' },
+      Pressure: { reg: 'OISD-117 §4.5', rule: 'Relief valve set-point verification. Over-pressurization interlock at 90% MAWP. Emergency depressurization above 95% MAWP.', src: 'PESO Static & Mobile Pressure Vessels Rules' },
+    };
+    const ragInfo = ragDocs[sensor.type] || { reg: 'OISD-116 General', rule: 'Standard operating procedure for sensor anomalies.', src: 'Company SOP Database' };
+
+    steps.push({ delay: 2000, action: () => {
+      setActiveFlow({ from: 'supervisor', to: 'rag' });
+      setActivityLog(prev => [...prev, {
+        agent: '📚 RAG Retrieval', severity: 'rag', time: now, isChunk: true,
+        text: `Querying knowledge base...\n📄 ${ragInfo.reg}: "${ragInfo.rule}"\n📎 Source: ${ragInfo.src}\n🔍 Also retrieved: Equipment log for ${sensorLabel}, Incident history for ${sensor.zoneId}`,
+      }]);
+    }});
+
+    // Step 3-N: Each connected sub-agent activates sequentially (after RAG)
+    connectedAgents.forEach((ag, i) => {
+      if (ag.id === 'scada') return; // Already shown
+      steps.push({ delay: 3400 + i * 900, action: () => {
+        setHighlightAgent(ag.id);
+        setActiveFlow({ from: 'supervisor', to: ag.id });
+
+        // Agent-specific RAG-informed messages
+        const agentMessages = {
+          cascade: `Analyzing domino chains from ${sensor.type} anomaly. Per ${ragInfo.reg}, ${isCrit ? 'HIGH cascade risk — checking connected zones for thermal/pressure propagation.' : 'monitoring linked failure paths per safety case.'}`,
+          predictive: `Running regression on ${sensorLabel}. ${isCrit ? `Current trend predicts sustained breach. ${ragInfo.reg} mandates immediate intervention.` : 'Forecasting: threshold approach in estimated time.'}`,
+          emergency: `${isCrit ? `EMERGENCY PROTOCOLS per ${ragInfo.src}. Fire brigade and medical teams on standby. ${ragInfo.reg} compliance verified.` : 'Monitoring — no emergency action required yet.'}`,
+          evacuation: `${isCrit ? `Evacuation routes for ${sensor.zoneId} per ${ragInfo.reg}. Assembly points identified per company ERP.` : 'Evacuation planning on standby.'}`,
+          compliance: `Checking ${ragInfo.reg} for ${sensor.type} at ${val.toFixed(1)} ${sensor.unit}. ${isCrit ? `VIOLATION — mandatory shutdown per ${ragInfo.src}.` : 'Within regulatory limits.'}`,
+          environmental: `Ambient conditions assessed per ${ragInfo.src}. ${sensor.type === 'gas' || sensor.type === 'CH4' || sensor.type === 'CO' ? 'Wind dispersion model updated.' : 'Thermal analysis running.'}`,
+          maintenance: `Equipment health check per ${ragInfo.reg}. ${isCrit ? 'Valve inspection triggered. Maintenance log updated.' : 'No maintenance action needed.'}`,
+          resource: `Worker proximity check for ${sensor.zoneId}. ${isCrit ? `Alert sent per ${ragInfo.src}. ${sensor.zoneId} personnel notified.` : 'All workers in safe positions.'}`,
+          digital_twin: `Physics simulation updated: ${sensor.type} = ${val.toFixed(1)}. Model cross-referenced with ${ragInfo.reg}. ${isCrit ? 'Elevated risk confirmed.' : 'Parameters nominal.'}`,
+        };
+        setActivityLog(prev => [...prev, {
+          agent: `${ag.icon} ${ag.name}`, severity: isCrit ? 'danger' : isWarn ? 'warning' : 'info', time: now,
+          text: agentMessages[ag.id] || `Processing ${sensorLabel} data per ${ragInfo.reg}.`,
+        }]);
+      }});
+    });
+
+    // Final step: Supervisor conclusion
+    const totalDelay = 3400 + connectedAgents.length * 900 + 800;
+    steps.push({ delay: totalDelay, action: () => {
+      setHighlightAgent('supervisor');
+      setActiveFlow(null);
+      if (isCrit) {
+        setIsEmergency(true);
+        setNarration(`🚨 EMERGENCY — ${sensorLabel} at CRITICAL level. Multi-agent response active.`);
+      } else if (isWarn) {
+        setNarration(`⚠️ WARNING — ${sensorLabel} elevated. AI agents monitoring and ready.`);
+      } else {
+        setNarration(`📡 Elevated reading on ${sensorLabel}. Agents tracking.`);
+      }
+      setActivityLog(prev => [...prev, {
+        agent: '🧠 Supervisor', severity: isCrit ? 'emergency' : 'info', time: now,
+        text: isCrit
+          ? `Analysis complete. ${connectedAgents.length} agents processed ${sensorLabel} per ${ragInfo.reg}. EMERGENCY RESPONSE initiated for ${sensor.zoneId}. Regulatory compliance: ${ragInfo.src}.`
+          : `Analysis complete. ${connectedAgents.length} agents processed ${sensorLabel}. Decision basis: ${ragInfo.reg}. Situation ${isWarn ? 'under active monitoring per ' + ragInfo.src : 'nominal'}.`,
+      }]);
+    }});
+
+    // Clear highlights after pipeline completes
+    steps.push({ delay: totalDelay + 4000, action: () => {
+      setHighlightAgent(null);
+      setActiveFlow(null);
+      setHighlightSensor(null);
+      if (!isCrit) setIsEmergency(false);
+    }});
+
+    // Execute the timed sequence
+    steps.forEach(step => {
+      const t = setTimeout(step.action, step.delay);
+      reactiveTimersRef.current.push(t);
+    });
+  }, [onOverride, sensors]);
 
   const resetCinema = useCallback(() => {
     setIsEmergency(false);
@@ -249,30 +461,30 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
       <div style={S.narBar}>
         <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
           <div style={{ width:'7px', height:'7px', borderRadius:'50%', flexShrink:0,
-            background: isEmergency ? '#ef4444' : hasAnyWarning ? '#f59e0b' : cinemaActive ? '#a78bfa' : '#10b981',
+            background: isEmergency ? '#DC2626' : hasAnyWarning ? '#D97706' : cinemaActive ? '#7C3AED' : '#059669',
             animation: isEmergency ? 'blink 0.6s infinite' : cinemaActive ? 'blink 1.5s infinite' : 'none',
           }} />
           {/* Mode badge */}
           <div style={{
             padding: '1px 6px', borderRadius: '3px', fontSize: '7px', fontWeight: 700,
             letterSpacing: '1px', flexShrink: 0,
-            background: cinemaActive ? 'rgba(139,92,246,0.2)' : 'rgba(16,185,129,0.15)',
-            color: cinemaActive ? '#a78bfa' : '#10b981',
-            border: `1px solid ${cinemaActive ? '#a78bfa30' : '#10b98130'}`,
+            background: cinemaActive ? '#F5F3FF' : '#F0FDF4',
+            color: cinemaActive ? '#7C3AED' : '#059669',
+            border: `1px solid ${cinemaActive ? '#DDD6FE' : '#D1FAE5'}`,
           }}>
             {cinemaActive ? '▶ DEMO' : '🎛 MANUAL'}
           </div>
-          <div style={{ fontSize:'11px', color:'#e2e8f0', fontWeight:500, animation:'fadeSlide 0.3s ease', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} key={cinemaActive ? narration : 'manual-' + scenarioKey}>
+          <div style={{ fontSize:'11px', color:'#1A1D26', fontWeight:500, animation:'fadeSlide 0.3s ease', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} key={cinemaActive ? narration : 'manual-' + scenarioKey}>
             {cinemaActive ? narration : `🎛️ Manual Mode — ${activeScenario.title}. Adjust sensors or press ▶ Play Demo.`}
           </div>
         </div>
         <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
           {cinemaActive ? (
-            <button onClick={() => { setCinemaActive(false); timersRef.current.forEach(t => clearTimeout(t)); setNarration('Paused'); }} style={{ ...S.btn, background: 'rgba(239,68,68,0.15)', borderColor: '#ef444440', color: '#ef4444' }}>⏸ Pause Demo</button>
+            <button onClick={() => { setCinemaActive(false); timersRef.current.forEach(t => clearTimeout(t)); setNarration('Paused'); }} style={{ ...S.btn, background: '#FEF2F2', borderColor: '#FECACA', color: '#DC2626' }}>⏸ Pause Demo</button>
           ) : (
-            <button onClick={resetCinema} style={{ ...S.btn, background: 'rgba(139,92,246,0.15)', borderColor: '#a78bfa40', color: '#a78bfa' }}>▶ Play Demo</button>
+            <button onClick={resetCinema} style={{ ...S.btn, background: '#F5F3FF', borderColor: '#DDD6FE', color: '#7C3AED' }}>▶ Play Demo</button>
           )}
-          <button onClick={() => setViewMode(v => v === '2d' ? '3d' : '2d')} style={{ ...S.btn, background: viewMode === '3d' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.06)', borderColor: viewMode === '3d' ? '#a78bfa' : 'rgba(255,255,255,0.1)', color: viewMode === '3d' ? '#a78bfa' : '#94a3b8' }}>
+          <button onClick={() => setViewMode(v => v === '2d' ? '3d' : '2d')} style={{ ...S.btn, background: viewMode === '3d' ? '#F5F3FF' : '#F0F2F5', borderColor: viewMode === '3d' ? '#DDD6FE' : '#D0D5DE', color: viewMode === '3d' ? '#7C3AED' : '#5A6376' }}>
             {viewMode === '3d' ? '🔲 2D View' : '🧊 3D View'}
           </button>
         </div>
@@ -281,7 +493,7 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
       {/* ══════ 3D MODE ══════ */}
       {viewMode === '3d' ? (
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <Suspense fallback={<div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#475569', fontSize:'12px' }}>Loading 3D scene...</div>}>
+          <Suspense fallback={<div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#5A6376', fontSize:'12px' }}>Loading 3D scene...</div>}>
             <Scene3D
               sensors={sensors}
               highlightAgent={highlightAgent}
@@ -300,20 +512,20 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
             background: 'rgba(10,14,26,0.88)', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.1)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden', backdropFilter: 'blur(8px)',
           }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '8px', fontWeight: 700, letterSpacing: '1.5px', color: '#334155' }}>AGENT ACTIVITY</div>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid #D0D5DE', fontSize: '8px', fontWeight: 700, letterSpacing: '1.5px', color: '#5A6376' }}>AGENT ACTIVITY</div>
             <div className="log-scroll" style={{ flex: 1, overflowY: 'auto', padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
               {activityLog.length === 0 ? (
-                <div style={{ padding: '12px', textAlign: 'center', color: '#1e293b', fontSize: '10px' }}>Waiting for sensor events...</div>
+                <div style={{ padding: '12px', textAlign: 'center', color: '#9CA3AF', fontSize: '10px' }}>Waiting for sensor events...</div>
               ) : activityLog.map((entry, i) => (
                 <div key={i} style={{
                   padding: '5px 7px', borderRadius: '5px', animation: 'fadeSlide 0.3s ease',
                   background: entry.severity === 'emergency' ? 'rgba(239,68,68,0.08)' : entry.severity === 'rag' ? 'rgba(16,185,129,0.06)' : 'rgba(17,24,39,0.4)',
-                  border: `1px solid ${entry.severity === 'emergency' ? '#ef444430' : entry.severity === 'rag' ? '#10b98130' : 'rgba(255,255,255,0.04)'}`,
+                  border: `1px solid ${entry.severity === 'emergency' ? '#FECACA' : entry.severity === 'rag' ? '#D1FAE5' : '#D0D5DE'}`,
                 }}>
-                  <div style={{ fontSize: '7px', fontWeight: 700, color: entry.severity === 'emergency' ? '#ef4444' : entry.severity === 'rag' ? '#10b981' : entry.severity === 'warning' ? '#f59e0b' : '#60a5fa', marginBottom: '2px' }}>{entry.agent}</div>
+                  <div style={{ fontSize: '7px', fontWeight: 700, color: entry.severity === 'emergency' ? '#DC2626' : entry.severity === 'rag' ? '#059669' : entry.severity === 'warning' ? '#D97706' : '#2563EB', marginBottom: '2px' }}>{entry.agent}</div>
                   <div style={{
-                    fontSize: '8px', color: '#94a3b8', lineHeight: 1.4, whiteSpace: 'pre-wrap',
-                    ...(entry.isChunk ? { background: 'rgba(16,185,129,0.05)', padding: '4px 6px', borderRadius: '3px', borderLeft: '2px solid #10b981', fontFamily: "'Courier New',monospace", fontSize: '7.5px' } : {}),
+                    fontSize: '8px', color: '#5A6376', lineHeight: 1.4, whiteSpace: 'pre-wrap',
+                    ...(entry.isChunk ? { background: '#F0FDF4', padding: '4px 6px', borderRadius: '3px', borderLeft: '2px solid #059669', fontFamily: "'Courier New',monospace", fontSize: '7.5px' } : {}),
                   }}>{entry.text}</div>
                 </div>
               ))}
@@ -331,14 +543,14 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
                 background: 'rgba(10,14,26,0.9)', borderRadius: '8px', border: '1px solid rgba(139,92,246,0.3)',
                 padding: '10px', backdropFilter: 'blur(8px)',
               }}>
-                <div style={{ fontSize: '10px', color: '#e2e8f0', fontWeight: 700, marginBottom: '4px' }}>
+                <div style={{ fontSize: '10px', color: '#1A1D26', fontWeight: 700, marginBottom: '4px' }}>
                   {TYPE_ICONS[s.type] || '📡'} {s.type} — {s.currentValue.toFixed(1)} {s.unit}
                 </div>
-                <div style={{ fontSize: '8px', color: '#475569', marginBottom: '4px' }}>{s.label}</div>
+                <div style={{ fontSize: '8px', color: '#5A6376', marginBottom: '4px' }}>{s.label}</div>
                 <input type="range" min={0} max={max} step={max>100?1:0.1} value={s.currentValue}
                   onChange={e => handleManualOverride(s.id, +e.target.value)} style={{ width: '100%' }} />
                 <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                  {[{ l:'Safe', v:+(s.warningThreshold*0.1).toFixed(1), c:'#10b981' }, { l:'Warn', v:s.warningThreshold, c:'#f59e0b' }, { l:'Crit', v:s.criticalThreshold, c:'#ef4444' }].map(p => (
+                  {[{ l:'Safe', v:+(s.warningThreshold*0.1).toFixed(1), c:'#059669' }, { l:'Warn', v:s.warningThreshold, c:'#D97706' }, { l:'Crit', v:s.criticalThreshold, c:'#DC2626' }].map(p => (
                     <button key={p.l} onClick={() => handleManualOverride(s.id, p.v)} style={{
                       flex:1, padding:'3px', borderRadius:'4px', cursor:'pointer',
                       background:`${p.c}15`, border:`1px solid ${p.c}30`, color:p.c,
@@ -353,10 +565,10 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
       ) : (
       <div style={S.main}>
 
-        {/* ─── COL 1: SENSORS (sorted by severity) ─── */}
-        <div style={{ ...S.col, flex: '0 0 220px' }}>
+        {/* ─── COL 1: SENSORS ─── */}
+        <div style={{ ...S.col, flex: '0 0 240px' }}>
           <div style={S.colLabel}>SENSORS</div>
-          <div className="sensor-scroll" style={S.scroll}>
+          <div className="sensor-scroll" style={{ ...S.scroll, gap:'6px' }}>
             {sensors.map(s => {
               const c = getColor(s);
               const isSel = selectedId === s.id;
@@ -370,48 +582,63 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
               return (
                 <div key={s.id} onClick={() => setSelectedId(isSel ? null : s.id)}
                   style={{
-                    padding: '7px 9px', borderRadius: '7px', cursor: 'pointer',
-                    border: `1.5px solid ${isCrit ? '#ef4444' : isWarn ? '#f59e0b' : isSel ? '#a78bfa' : isHL ? '#a78bfa50' : 'rgba(255,255,255,0.05)'}`,
-                    background: isCrit ? 'rgba(239,68,68,0.08)' : isWarn ? 'rgba(245,158,11,0.05)' : isSel ? 'rgba(139,92,246,0.06)' : 'rgba(17,24,39,0.5)',
+                    padding: '10px 12px', borderRadius: '12px', cursor: 'pointer',
+                    border: `1px solid ${isCrit ? 'rgba(220,38,38,0.3)' : isWarn ? 'rgba(217,119,6,0.25)' : isSel ? '#2563EB' : isHL ? 'rgba(37,99,235,0.3)' : '#D0D5DE'}`,
+                    background: isCrit ? '#FEF2F2' : isWarn ? '#FFFBEB' : isSel ? '#EFF6FF' : '#FFFFFF',
+                    boxShadow: isCrit ? '0 0 0 1px rgba(220,38,38,0.1)' : isWarn ? '0 0 0 1px rgba(217,119,6,0.08)' : isSel ? '0 2px 8px rgba(37,99,235,0.1)' : '0 1px 2px rgba(0,0,0,0.04)',
                     animation: isCrit ? 'glowRed 1.2s infinite' : isWarn ? 'glowYellow 1.5s infinite' : isHL ? 'pulseHL 1s infinite' : 'none',
-                    transition: 'all 0.3s',
+                    transition: 'all 0.3s ease',
                   }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
-                      <span style={{ fontSize:'13px' }}>{icon}</span>
-                      <span style={{ color: isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#e2e8f0', fontSize:'10px', fontWeight:700 }}>{s.type}</span>
-                      <span style={{ color:'#334155', fontSize:'8px' }}>{s.zoneId}</span>
+                  {/* Top row: icon + label + zone badge */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'6px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                      <span style={{ fontSize:'16px' }}>{icon}</span>
+                      <div>
+                        <div style={{ color: isCrit ? '#DC2626' : isWarn ? '#D97706' : '#1A1D26', fontSize:'11px', fontWeight:700, lineHeight:1.2 }}>{s.type}</div>
+                        <div style={{ fontSize:'7px', color:'#9CA3AF', marginTop:'1px' }}>{s.label || s.id}</div>
+                      </div>
                     </div>
-                    <span style={{ fontFamily:'monospace', fontSize:'13px', fontWeight:800, color: c, transition:'color 0.3s' }}>
+                    <span style={{
+                      fontSize:'7px', fontWeight:600, padding:'2px 5px', borderRadius:'4px',
+                      background:'#EFF6FF', color:'#2563EB', letterSpacing:'0.5px',
+                    }}>{s.zoneId}</span>
+                  </div>
+                  {/* Value row */}
+                  <div style={{ display:'flex', alignItems:'baseline', gap:'3px', marginBottom:'4px' }}>
+                    <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'18px', fontWeight:800, color: c, transition:'color 0.3s', letterSpacing:'-0.5px' }}>
                       {s.currentValue.toFixed(1)}
-                      <span style={{ fontSize:'8px', color:'#475569', marginLeft:'1px' }}>{s.unit}</span>
                     </span>
+                    <span style={{ fontSize:'9px', color:'#9CA3AF', fontWeight:500 }}>{s.unit}</span>
+                    {(isCrit || isWarn) && (
+                      <span style={{
+                        fontSize:'7px', fontWeight:700, letterSpacing:'0.5px', marginLeft:'auto',
+                        color: isCrit ? '#DC2626' : '#D97706', textTransform: 'uppercase',
+                        padding:'1px 4px', borderRadius:'3px',
+                        background: isCrit ? '#FEE2E2' : '#FEF3C7',
+                      }}>{isCrit ? '⚠ CRIT' : '△ WARN'}</span>
+                    )}
                   </div>
-                  {/* Status tag */}
-                  {(isCrit || isWarn) && (
-                    <div style={{ fontSize:'7px', fontWeight:700, letterSpacing:'0.5px', marginTop:'3px',
-                      color: isCrit ? '#ef4444' : '#f59e0b', textTransform: 'uppercase',
-                    }}>{isCrit ? '⚠ CRITICAL — ABOVE THRESHOLD' : '△ WARNING — ELEVATED'}</div>
-                  )}
-                  {/* Bar */}
-                  <div style={{ width:'100%', height:'3px', background:'rgba(255,255,255,0.05)', borderRadius:'2px', marginTop:'4px', position:'relative' }}>
-                    <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:c, borderRadius:'2px', transition:'width 0.5s ease' }} />
+                  {/* Progress bar */}
+                  <div style={{ width:'100%', height:'3px', background:'#D0D5DE', borderRadius:'2px', position:'relative' }}>
+                    <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background: c, borderRadius:'2px', transition:'width 0.5s ease' }} />
                   </div>
-                  {/* Slider */}
+                  {/* Threshold labels */}
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'7px', color:'#9CA3AF', marginTop:'3px' }}>
+                    <span>{s.normalRange?.min ?? 0}</span>
+                    <span style={{ color:'#D97706' }}>⚠ {s.warningThreshold}</span>
+                    <span style={{ color:'#DC2626' }}>● {s.criticalThreshold}</span>
+                  </div>
+                  {/* Slider when selected */}
                   {isSel && (
-                    <div style={{ marginTop:'6px', animation:'fadeSlide 0.2s ease' }} onClick={e => e.stopPropagation()}>
-                      <div style={{ fontSize:'8px', color:'#475569', marginBottom:'3px' }}>{s.label}</div>
+                    <div style={{ marginTop:'8px', paddingTop:'8px', borderTop:'1px solid #D0D5DE', animation:'fadeSlide 0.2s ease' }} onClick={e => e.stopPropagation()}>
                       <input type="range" min={0} max={max} step={max>100?1:0.1} value={s.currentValue}
                         onChange={e => handleManualOverride(s.id, +e.target.value)} style={{ width:'100%' }} />
-                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:'7px', color:'#334155' }}>
-                        <span>0</span><span style={{ color:'#f59e0b' }}>⚠{s.warningThreshold}</span><span style={{ color:'#ef4444' }}>🔴{s.criticalThreshold}</span>
-                      </div>
-                      <div style={{ display:'flex', gap:'3px', marginTop:'3px' }}>
-                        {[{ l:'Safe', v:+(s.warningThreshold*0.1).toFixed(1), c:'#10b981' }, { l:'Warn', v:s.warningThreshold, c:'#f59e0b' }, { l:'Crit', v:s.criticalThreshold, c:'#ef4444' }].map(p => (
+                      <div style={{ display:'flex', gap:'4px', marginTop:'4px' }}>
+                        {[{ l:'Safe', v:+(s.warningThreshold*0.1).toFixed(1), c:'#059669' }, { l:'Warn', v:s.warningThreshold, c:'#D97706' }, { l:'Crit', v:s.criticalThreshold, c:'#DC2626' }].map(p => (
                           <button key={p.l} onClick={() => handleManualOverride(s.id, p.v)} style={{
-                            flex:1, padding:'2px', borderRadius:'3px', cursor:'pointer',
-                            background:`${p.c}12`, border:`1px solid ${p.c}25`, color:p.c,
-                            fontSize:'8px', fontWeight:600, fontFamily:'inherit',
+                            flex:1, padding:'4px', borderRadius:'6px', cursor:'pointer',
+                            background:`${p.c}10`, border:`1px solid ${p.c}20`, color:p.c,
+                            fontSize:'9px', fontWeight:600, fontFamily:'inherit', transition:'all 0.2s',
                           }}>{p.l}</button>
                         ))}
                       </div>
@@ -423,148 +650,314 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
           </div>
         </div>
 
-        {/* ─── ARROWS LEFT ─── */}
-        <div style={S.arrowCol}>
-          {sensors.slice(0,6).map((s,i) => {
-            const active = s.currentValue >= (s.warningThreshold||1)*0.3;
-            const isFlowing = activeFlow?.from === 'sensor';
-            return <div key={s.id} style={{
-              color: isFlowing ? '#a78bfa' : active ? getColor(s) : '#111827',
-              fontSize:'13px', fontWeight:700,
-              animation: isFlowing ? `flowPulse 0.5s infinite ${i*0.06}s` : active ? `flowPulse 1.2s infinite ${i*0.1}s` : 'none',
-            }}>→</div>;
-          })}
+        {/* ─── CONNECTION ARROWS: Sensor → Sub-Agents ─── */}
+        {(() => {
+          // Build unique agents list and determine which are connected to selected sensor
+          const UNIQUE_AGENTS = [
+            { id: 'scada', name: 'SCADA', icon: '📡', color: '#60a5fa', desc: 'Sensor Analysis' },
+            { id: 'cascade', name: 'Cascade', icon: '🔗', color: '#ec4899', desc: 'Failure Chains' },
+            { id: 'predictive', name: 'Predictive', icon: '📈', color: '#f59e0b', desc: 'Forecasting' },
+            { id: 'emergency', name: 'Emergency', icon: '🚨', color: '#ef4444', desc: 'Protocols' },
+            { id: 'evacuation', name: 'Evacuation', icon: '🚷', color: '#f97316', desc: 'Route Planner' },
+            { id: 'compliance', name: 'Compliance', icon: '⚖️', color: '#a78bfa', desc: 'Regulations' },
+            { id: 'environmental', name: 'Environ', icon: '🌿', color: '#22c55e', desc: 'Ambient Monitor' },
+            { id: 'maintenance', name: 'Maintenance', icon: '🔧', color: '#f97316', desc: 'Equipment Health' },
+            { id: 'resource', name: 'Resource', icon: '👷', color: '#06b6d4', desc: 'Worker Safety' },
+            { id: 'digital_twin', name: 'Digital Twin', icon: '🏭', color: '#8b5cf6', desc: 'Physics Engine' },
+          ];
+
+          const selSensor = sensors.find(s => s.id === selectedId);
+          const connectedAgentIds = selSensor ? (SENSOR_AGENTS[selSensor.type] || []).map(a => a.id) : [];
+          const hasSelection = !!selSensor;
+
+          return (
+            <>
+              {/* Arrow column */}
+              <div style={{
+                flex: '0 0 28px', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', position: 'relative',
+              }}>
+                <svg width="28" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
+                  {/* Static guide lines */}
+                  {UNIQUE_AGENTS.map((ag, i) => {
+                    const isConn = connectedAgentIds.includes(ag.id);
+                    const isAgentActive = highlightAgent === ag.id;
+                    const lineColor = isConn ? ag.color : isAgentActive ? ag.color : 'rgba(255,255,255,0.04)';
+                    const y = 32 + i * 36;
+                    return (
+                      <g key={ag.id}>
+                        <line x1="0" y1={y} x2="20" y2={y}
+                          stroke={lineColor} strokeWidth={isConn ? 1.5 : 0.5}
+                          strokeDasharray={isConn ? 'none' : '2,3'}
+                          style={{ transition: 'all 0.4s' }}
+                        />
+                        {/* Arrowhead */}
+                        <polygon
+                          points={`20,${y-3} 26,${y} 20,${y+3}`}
+                          fill={isConn ? ag.color : 'rgba(255,255,255,0.06)'}
+                          style={{ transition: 'all 0.4s' }}
+                        />
+                        {/* Animated dot when connected */}
+                        {isConn && (
+                          <circle r="2" fill={ag.color} opacity="0.8">
+                            <animate attributeName="cx" from="0" to="24" dur="1.2s" repeatCount="indefinite" />
+                            <animate attributeName="cy" values={`${y};${y}`} dur="1.2s" repeatCount="indefinite" />
+                          </circle>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* ─── SUB-AGENTS column — unique cards ─── */}
+              <div style={{ ...S.col, flex: '0 0 140px' }}>
+                <div style={{ ...S.colLabel, fontSize: '7px', letterSpacing: '1.2px', color: '#5A6376' }}>SUB‑AGENTS</div>
+                <div style={{ ...S.scroll, gap: '4px' }}>
+                  {UNIQUE_AGENTS.map(ag => {
+                    const isConn = connectedAgentIds.includes(ag.id);
+                    const isAgentHL = highlightAgent === ag.id;
+                    const isLit = isConn || isAgentHL;
+                    return (
+                      <div key={ag.id} style={{
+                        padding: '7px 8px', borderRadius: '10px', position:'relative',
+                        background: isLit ? '#FAFBFC' : '#FFFFFF',
+                        border: `1px solid ${isLit ? ag.color + '40' : '#D0D5DE'}`,
+                        transition: 'all 0.4s ease',
+                        transform: isLit ? 'translateX(2px)' : 'translateX(0)',
+                        boxShadow: isLit ? `0 2px 8px ${ag.color}15` : '0 1px 3px rgba(0,0,0,0.06)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                          <span style={{
+                            fontSize: '14px', width: '24px', height: '24px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: '6px',
+                            background: isLit ? `${ag.color}15` : '#EBEDF2',
+                            transition: 'all 0.3s',
+                          }}>{ag.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{
+                              fontSize: '9px', fontWeight: 700,
+                              color: isLit ? ag.color : '#5A6376',
+                              letterSpacing: '0.3px',
+                              transition: 'color 0.3s',
+                            }}>{ag.name}</div>
+                            <div style={{
+                              fontSize: '7px', color: isLit ? '#5A6376' : '#9CA3AF',
+                              letterSpacing: '0.2px', marginTop: '1px',
+                              transition: 'color 0.3s',
+                            }}>{ag.desc}</div>
+                          </div>
+                          {/* Status dot */}
+                          {isLit && (
+                            <div style={{
+                              width:'5px', height:'5px', borderRadius:'50%', flexShrink:0,
+                              background: ag.color, boxShadow: `0 0 8px ${ag.color}60`,
+                              animation: 'pulse 1.5s infinite',
+                            }} />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          );
+        })()}
+
+        {/* Arrow connector */}
+        <div style={{ flex:'0 0 16px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ color: activeFlow ? '#2563EB' : '#D1D5DB', fontSize:'14px', fontWeight:700, transition:'color 0.3s' }}>›</div>
         </div>
 
-        {/* ─── COL 2: AGENT BRAIN + ACTIVITY LOG ─── */}
-        <div style={{ ...S.col, flex: '1 1 auto' }}>
+        {/* ─── COL 2: AGENT BRAIN + OUTPUT ─── */}
+        <div style={{ ...S.col, flex: '1 1 0', minWidth: 0 }}>
           <div style={S.colLabel}>AI AGENT BRAIN</div>
 
-          {/* Brain card */}
-          <div style={{ ...S.brain, borderColor: isEmergency ? '#ef444460' : hasAnyWarning ? '#f59e0b40' : '#a78bfa20' }}>
-            <div style={{ textAlign:'center', padding:'4px',
-              background: highlightAgent === 'supervisor' ? 'rgba(139,92,246,0.1)' : 'transparent',
-              borderRadius:'8px', transition:'background 0.5s',
-              animation: highlightAgent === 'supervisor' ? 'agentGlow 0.8s infinite' : 'none',
-            }}>
-              <div style={{ fontSize:'22px' }}>🧠</div>
-              <div style={{ color:'#e2e8f0', fontSize:'11px', fontWeight:700 }}>Supervisor</div>
-              <div style={{ color:'#475569', fontSize:'7px' }}>Gemini 2.5 Flash</div>
+          {/* Brain card — compact */}
+          <div style={{
+            ...S.brain,
+            borderColor: isEmergency ? 'rgba(220,38,38,0.3)' : hasAnyWarning ? 'rgba(217,119,6,0.2)' : '#D0D5DE',
+            padding: '10px',
+          }}>
+            {/* Header row */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px', paddingBottom:'6px', borderBottom:'1px solid #EBEDF2' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                <div style={{
+                  width:'6px', height:'6px', borderRadius:'50%',
+                  background: isEmergency ? '#DC2626' : hasAnyWarning ? '#D97706' : '#059669',
+                  boxShadow: `0 0 4px ${isEmergency ? '#DC262660' : hasAnyWarning ? '#D9770660' : '#05966940'}`,
+                  animation: isEmergency || hasAnyWarning ? 'pulse 1.5s infinite' : 'none',
+                }} />
+                <span style={{ fontSize:'8px', fontWeight:700, color:'#1A1D26', letterSpacing:'0.5px', textTransform:'uppercase' }}>
+                  Multi-Agent Orchestrator
+                </span>
+              </div>
+              <span style={{
+                fontSize:'6px', fontWeight:600, padding:'1px 5px', borderRadius:'3px',
+                background: isEmergency ? '#FEF2F2' : hasAnyWarning ? '#FFFBEB' : '#F0FDF4',
+                color: isEmergency ? '#DC2626' : hasAnyWarning ? '#D97706' : '#059669',
+                border: `1px solid ${isEmergency ? '#FECACA' : hasAnyWarning ? '#FDE68A' : '#D1FAE5'}`,
+              }}>{isEmergency ? 'EMERGENCY' : hasAnyWarning ? 'ALERT' : 'NOMINAL'}</span>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'3px', marginTop:'4px' }}>
+
+            {/* Supervisor — compact, glows when active */}
+            {(() => {
+              const supActive = highlightAgent === 'supervisor' || hasAnyWarning || isEmergency;
+              const supColor = isEmergency ? '#DC2626' : hasAnyWarning ? '#7C3AED' : '#059669';
+              return (
+                <div style={{
+                  textAlign:'center', padding:'6px', marginBottom:'6px',
+                  background: supActive ? (isEmergency ? '#FEF2F2' : '#F5F3FF') : '#FAFBFC',
+                  border: `1px solid ${supActive ? supColor + '40' : '#EBEDF2'}`,
+                  boxShadow: supActive ? `0 0 10px ${supColor}20` : 'none',
+                  borderRadius:'8px', transition:'all 0.5s',
+                }}>
+                  <div style={{ fontSize:'20px', marginBottom:'2px' }}>🧠</div>
+                  <div style={{ color: supActive ? supColor : '#1A1D26', fontSize:'10px', fontWeight:800 }}>Supervisor Agent</div>
+                  <div style={{ color:'#9CA3AF', fontSize:'7px' }}>Decision Engine · Risk Aggregation</div>
+                  {supActive && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background: supColor, margin:'3px auto 0', boxShadow:`0 0 8px ${supColor}`, animation:'pulse 1.5s infinite' }} />}
+                </div>
+              );
+            })()}
+
+            {/* Agent grid — compact 3x2, highlights active agents */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'3px' }}>
               {AGENTS.map(a => {
                 const isHL = highlightAgent === a.id;
+                // Determine if agent is actively engaged based on system state
+                const isActive = isHL || (
+                  (a.id === 'scada' && hasAnyWarning) ||
+                  (a.id === 'pattern' && hasAnyWarning) ||
+                  (a.id === 'predictive' && hasAnyWarning) ||
+                  (a.id === 'compliance' && hasAnyCritical) ||
+                  (a.id === 'cascade' && hasAnyCritical) ||
+                  (a.id === 'equipment' && isEmergency)
+                );
                 return (
                   <div key={a.id} style={{
-                    padding:'4px', borderRadius:'5px', textAlign:'center',
-                    background: isHL ? `${a.color}18` : 'transparent',
-                    border: `1px solid ${isHL ? a.color+'50' : 'rgba(255,255,255,0.04)'}`,
-                    transition:'all 0.4s', color: a.color,
+                    padding:'4px 3px', borderRadius:'6px', textAlign:'center',
+                    background: isHL ? `${a.color}15` : isActive ? `${a.color}08` : '#FAFBFC',
+                    border: `1px solid ${isHL ? a.color+'50' : isActive ? a.color+'30' : '#EBEDF2'}`,
+                    boxShadow: isHL ? `0 0 8px ${a.color}30` : isActive ? `0 0 4px ${a.color}15` : 'none',
+                    transition:'all 0.4s',
                     animation: isHL ? 'agentGlow 0.8s infinite' : 'none',
                   }}>
                     <div style={{ fontSize:'12px' }}>{a.icon}</div>
-                    <div style={{ fontSize:'7px', fontWeight:600 }}>{a.name}</div>
+                    <div style={{ fontSize:'7px', fontWeight:700, color: isHL || isActive ? a.color : '#1A1D26' }}>{a.name}</div>
+                    {isActive && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background: a.color, margin:'2px auto 0', boxShadow:`0 0 6px ${a.color}`, animation:'pulse 1.5s infinite' }} />}
                   </div>
                 );
               })}
+            </div>
+
+            {/* Status bar */}
+            <div style={{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              marginTop:'6px', paddingTop:'5px', borderTop:'1px solid #EBEDF2',
+              fontSize:'7px', color:'#9CA3AF',
+            }}>
+              <span>{AGENTS.length + 1} agents</span>
+              <span style={{ display:'flex', alignItems:'center', gap:'2px' }}>
+                <span style={{ width:'4px', height:'4px', borderRadius:'50%', background:'#059669', display:'inline-block', animation:'pulse 2s infinite' }} />
+                Active
+              </span>
+              <span>{critCount}C · {warnCount}W</span>
             </div>
           </div>
 
           {/* RAG card */}
           <div style={{
             ...S.dbCard,
-            background: activeFlow?.to === 'rag' || activeFlow?.from === 'rag' ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.02)',
-            borderColor: activeFlow?.to === 'rag' ? '#10b981' : 'rgba(16,185,129,0.15)',
+            background: activeFlow?.to === 'rag' || activeFlow?.from === 'rag' ? '#ECFDF5' : '#F0FDF4',
+            borderColor: activeFlow?.to === 'rag' ? '#059669' : '#D1FAE5',
           }}>
-            <span style={{ fontSize:'13px' }}>📚</span>
+            <span style={{ fontSize:'11px' }}>📚</span>
             <div>
-              <div style={{ color:'#10b981', fontSize:'9px', fontWeight:700 }}>RAG + Company DB</div>
-              <div style={{ color:'#334155', fontSize:'7px' }}>OISD-116 · DGMS · Equipment logs</div>
+              <div style={{ color:'#059669', fontSize:'8px', fontWeight:700 }}>RAG + Company DB</div>
+              <div style={{ color:'#9CA3AF', fontSize:'7px' }}>OISD-116 · DGMS · Equipment logs</div>
             </div>
           </div>
 
-          {/* ── ACTIVITY LOG ── */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', marginTop:'4px', minHeight:0 }}>
-            <div style={{ fontSize:'8px', fontWeight:700, letterSpacing:'1.5px', color:'#334155', padding:'2px 0' }}>AGENT ACTIVITY</div>
-            <div className="log-scroll" style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:'3px' }}>
-              {activityLog.length === 0 ? (
-                <div style={{ padding:'12px', textAlign:'center', color:'#1e293b', fontSize:'10px' }}>
-                  Waiting for sensor events...
+          {/* ── OUTPUT CARDS ── */}
+          <div style={{ fontSize:'8px', fontWeight:700, letterSpacing:'1.5px', color:'#9CA3AF', padding:'2px 0', textAlign:'center', textTransform:'uppercase' }}>OUTPUT</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'4px', flex:1 }}>
+            {[
+              { icon: '⚠️', t: 'Warning System', id: 'warning', active: hasAnyWarning, c: '#D97706',
+                sub: hasAnyWarning ? `${warningCount} alert${warningCount !== 1 ? 's' : ''}` : 'No alerts',
+                details: hasAnyWarning ? sensors.filter(s => s.currentValue >= (s.warningThreshold || Infinity)).map(s => `${s.name}: ${s.currentValue.toFixed(1)} ${s.unit || ''} (warn: ${s.warningThreshold})`) : [] },
+              { icon: '🚨', t: 'Emergency', id: 'emergency', active: isEmergency, c: '#DC2626',
+                sub: isEmergency ? 'Fire brigade contacted' : 'Standby', glow: true,
+                details: isEmergency ? ['8-step protocol active', 'All permits REVOKED', 'Gas isolation in progress', 'Evacuation routes calculated', 'DGMS Form-M generated'] : [] },
+              { icon: '🚷', t: 'Evacuation', id: 'evacuation', active: isEmergency, c: '#B91C1C',
+                sub: isEmergency ? 'Zone A — evacuating' : 'All clear',
+                details: isEmergency ? ['BFS shortest path active', 'Assembly Point B designated', 'Headcount verification running', 'Zone A sealed'] : [] },
+              { icon: '📄', t: 'Incident Report', id: 'report', active: hasAnyWarning, c: '#2563EB',
+                sub: hasAnyWarning ? 'DGMS Form-M ready' : 'No events',
+                details: hasAnyWarning ? ['DGMS Form-M auto-generated', 'Evidence chain preserved', 'OISD compliance logged', 'Audit trail complete'] : [] },
+            ].map((o, i) => (
+              <div key={i} onClick={() => o.active && setExpandedOutput(prev => prev === o.id ? null : o.id)} style={{
+                padding: '6px 8px', borderRadius: '8px', display:'flex', flexDirection:'column', gap: expandedOutput === o.id ? '6px' : '0px',
+                border: `1px solid ${o.active ? o.c + '30' : '#D0D5DE'}`,
+                background: o.active ? (expandedOutput === o.id ? '#F9FAFB' : '#FAFBFC') : '#FFFFFF',
+                opacity: o.active ? 1 : 0.6,
+                cursor: o.active ? 'pointer' : 'default',
+                transition: 'all 0.3s',
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                  <span style={{ fontSize:'13px' }}>{o.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ color: o.active ? o.c : '#9CA3AF', fontSize:'9px', fontWeight:700 }}>{o.t}</div>
+                    <div style={{ color: o.active ? '#5A6376' : '#D1D5DB', fontSize:'7px' }}>{o.sub}</div>
+                  </div>
+                  {o.active && <span style={{ fontSize:'8px', color:'#9CA3AF', transition:'transform 0.3s', transform: expandedOutput === o.id ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>}
                 </div>
-              ) : activityLog.map((entry, i) => (
-                <div key={i} style={{
-                  padding: '6px 8px', borderRadius: '6px', animation: 'fadeSlide 0.3s ease',
-                  background: entry.severity === 'emergency' ? 'rgba(239,68,68,0.08)' : entry.severity === 'danger' ? 'rgba(239,68,68,0.05)' : entry.severity === 'rag' ? 'rgba(16,185,129,0.06)' : entry.severity === 'warning' ? 'rgba(245,158,11,0.04)' : 'rgba(17,24,39,0.4)',
-                  border: `1px solid ${entry.severity === 'emergency' ? '#ef444430' : entry.severity === 'danger' ? '#ef444420' : entry.severity === 'rag' ? '#10b98130' : entry.severity === 'warning' ? '#f59e0b20' : 'rgba(255,255,255,0.04)'}`,
-                }}>
-                  <div style={{ fontSize:'8px', fontWeight:700,
-                    color: entry.severity === 'emergency' ? '#ef4444' : entry.severity === 'danger' ? '#dc2626' : entry.severity === 'rag' ? '#10b981' : entry.severity === 'warning' ? '#f59e0b' : '#60a5fa',
-                    marginBottom:'2px',
-                  }}>{entry.agent}</div>
-                  <div style={{
-                    fontSize:'9px', color: entry.severity === 'emergency' ? '#fca5a5' : '#94a3b8',
-                    lineHeight: 1.4, whiteSpace: 'pre-wrap',
-                    ...(entry.isChunk ? {
-                      background: 'rgba(16,185,129,0.06)', padding: '6px 8px', borderRadius: '4px',
-                      borderLeft: '3px solid #10b981', marginTop: '2px', fontSize: '8.5px',
-                      fontFamily: "'Courier New', monospace",
-                    } : {}),
-                  }}>{entry.text}</div>
-                </div>
-              ))}
-              <div ref={logEndRef} />
-            </div>
-          </div>
-        </div>
-
-        {/* ─── ARROWS RIGHT ─── */}
-        <div style={S.arrowCol}>
-          <div style={{ color: activeFlow?.to === 'emergency' ? '#ef4444' : hasAnyWarning ? '#f59e0b' : '#111827', fontSize:'13px', fontWeight:700,
-            animation: activeFlow?.to === 'emergency' ? 'flowPulse 0.4s infinite' : hasAnyWarning ? 'flowPulse 1s infinite' : 'none' }}>→</div>
-          <div style={{ color: isEmergency ? '#ef4444' : '#111827', fontSize:'13px', fontWeight:700,
-            animation: isEmergency ? 'flowPulse 0.5s infinite' : 'none' }}>→</div>
-        </div>
-
-        {/* ─── COL 3: OUTPUTS ─── */}
-        <div style={{ ...S.col, flex: '0 0 200px' }}>
-          <div style={S.colLabel}>OUTPUT</div>
-          {[
-            { icon: '⚠️', t: 'Warning System', active: hasAnyWarning, c: '#f59e0b',
-              sub: hasAnyWarning ? `${warningCount} alert${warningCount !== 1 ? 's' : ''} raised` : 'Monitoring — no alerts',
-              detail: hasAnyWarning ? 'Pressure anomaly detected in Zone A gas main. All linked sensors under watch.' : null },
-            { icon: '🚨', t: 'Emergency Services', active: isEmergency, c: '#ef4444',
-              sub: isEmergency ? 'CONTACTED — Fire brigade en route' : 'On standby — no incidents',
-              detail: isEmergency ? 'Rourkela Fire Station notified at 08:00:29. ETA: 4 minutes. Ambulance dispatched.' : null, glow: true },
-            { icon: '🚷', t: 'Auto-Evacuation', active: isEmergency, c: '#dc2626',
-              sub: isEmergency ? 'Zone A LOCKED — 15 workers evacuating' : 'All zones accessible',
-              detail: isEmergency ? 'Assembly Point B activated. Headcount verification in progress.' : null },
-            { icon: '📄', t: 'Incident Report', active: hasAnyWarning, c: '#60a5fa',
-              sub: hasAnyWarning ? 'DGMS Form-M auto-generated' : 'No reportable events',
-              detail: hasAnyWarning ? 'Regulatory incident report prepared per DGMS guidelines. Ready for supervisor sign-off.' : null },
-          ].map((o, i) => (
-            <div key={i} style={{
-              padding: '8px 10px', borderRadius: '7px',
-              border: `1px solid ${o.active ? o.c + '40' : 'rgba(255,255,255,0.04)'}`,
-              background: o.active && o.glow ? 'rgba(239,68,68,0.06)' : 'rgba(17,24,39,0.5)',
-              opacity: o.active ? 1 : 0.4,
-              animation: o.active && o.glow ? 'glowRed 1s infinite' : 'none',
-              transition: 'all 0.5s',
-            }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom: o.detail ? '4px' : 0 }}>
-                <span style={{ fontSize:'14px' }}>{o.icon}</span>
-                <div>
-                  <div style={{ color: o.active ? o.c : '#475569', fontSize:'10px', fontWeight:700, transition:'color 0.5s' }}>{o.t}</div>
-                  <div style={{ color: o.active ? '#94a3b8' : '#1e293b', fontSize:'8px' }}>{o.sub}</div>
-                </div>
+                {expandedOutput === o.id && o.details.length > 0 && (
+                  <div style={{ borderTop: `1px solid ${o.c}20`, paddingTop:'4px', display:'flex', flexDirection:'column', gap:'2px' }}>
+                    {o.details.map((d, j) => (
+                      <div key={j} style={{ fontSize:'7px', color:'#4B5563', display:'flex', alignItems:'center', gap:'4px' }}>
+                        <span style={{ color: o.c, fontSize:'6px' }}>●</span> {d}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {o.detail && o.active && (
-                <div style={{ fontSize:'8px', color:'#475569', lineHeight:1.3, paddingTop:'4px', borderTop:'1px solid rgba(255,255,255,0.04)' }}>
-                  {o.detail}
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+
+        {/* Arrow connector */}
+        <div style={{ flex:'0 0 16px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ color: hasAnyWarning ? '#D97706' : '#D1D5DB', fontSize:'14px', fontWeight:700, transition:'color 0.3s' }}>›</div>
+        </div>
+
+        {/* ─── COL 3: ACTIVITY LOG ─── */}
+        <div style={{ ...S.col, flex: '0 0 280px' }}>
+          <div style={S.colLabel}>AGENT ACTIVITY</div>
+          <div className="log-scroll" style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:'3px' }}>
+            {activityLog.length === 0 ? (
+              <div style={{ padding:'20px 12px', textAlign:'center', color:'#D1D5DB', fontSize:'10px' }}>
+                <div style={{ fontSize:'20px', marginBottom:'4px' }}>📡</div>
+                Adjust a sensor to see AI agents respond
+              </div>
+            ) : [...activityLog].reverse().map((entry, i) => (
+              <div key={activityLog.length - 1 - i} style={{
+                padding: '5px 8px', borderRadius: '6px', animation: i === 0 ? 'fadeSlide 0.3s ease' : 'none',
+                background: entry.severity === 'emergency' ? '#FEF2F2' : entry.severity === 'danger' ? '#FEF2F2' : entry.severity === 'rag' ? '#F0FDF4' : entry.severity === 'warning' ? '#FFFBEB' : '#F8FAFC',
+                borderLeft: `3px solid ${entry.severity === 'emergency' ? '#DC2626' : entry.severity === 'danger' ? '#B91C1C' : entry.severity === 'rag' ? '#059669' : entry.severity === 'warning' ? '#D97706' : '#2563EB'}`,
+              }}>
+                <span style={{ fontSize:'7px', fontWeight:700,
+                  color: entry.severity === 'emergency' ? '#DC2626' : entry.severity === 'danger' ? '#B91C1C' : entry.severity === 'rag' ? '#059669' : entry.severity === 'warning' ? '#D97706' : '#2563EB',
+                }}>● {entry.agent}</span>
+                <div style={{ fontSize:'8px', color:'#5A6376', lineHeight: 1.35, marginTop:'1px' }}>{entry.text}</div>
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+
+
       </div>
       )}
     </div>
@@ -573,14 +966,14 @@ export default function ArchitectureView({ sensors = [], onOverride, systemStatu
 
 // =============================================================================
 const S = {
-  root: { display:'flex', flexDirection:'column', height:'100%', width:'100%', fontFamily:"'Inter',system-ui,sans-serif", background:'#0a0e1a', overflow:'hidden' },
-  narBar: { display:'flex', alignItems:'center', padding:'6px 14px', gap:'8px', background:'rgba(17,24,39,0.7)', borderBottom:'1px solid rgba(148,163,184,0.08)', minHeight:'32px', flexShrink:0 },
-  btn: { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', color:'#94a3b8', padding:'3px 10px', borderRadius:'4px', cursor:'pointer', fontSize:'9px', fontWeight:600, fontFamily:'inherit' },
-  main: { display:'flex', alignItems:'stretch', flex:1, overflow:'hidden' },
-  col: { display:'flex', flexDirection:'column', gap:'4px', padding:'6px', minWidth:0 },
-  colLabel: { fontSize:'8px', fontWeight:700, letterSpacing:'2px', color:'#334155', textAlign:'center', padding:'2px 0', flexShrink:0 },
+  root: { display:'flex', flexDirection:'column', height:'100%', width:'100%', fontFamily:"'Inter',system-ui,sans-serif", background:'#EBEDF2', overflow:'hidden' },
+  narBar: { display:'flex', alignItems:'center', padding:'6px 14px', gap:'8px', background:'#FFFFFF', borderBottom:'1px solid #D0D5DE', minHeight:'32px', flexShrink:0 },
+  btn: { background:'#F0F2F5', border:'1px solid #D0D5DE', color:'#5A6376', padding:'3px 10px', borderRadius:'6px', cursor:'pointer', fontSize:'9px', fontWeight:600, fontFamily:'inherit', transition:'all 0.2s' },
+  main: { display:'flex', alignItems:'stretch', flex:1, overflow:'hidden', gap:'2px' },
+  col: { display:'flex', flexDirection:'column', gap:'4px', padding:'5px', minWidth:0 },
+  colLabel: { fontSize:'8px', fontWeight:700, letterSpacing:'2.5px', color:'#9CA3AF', textAlign:'center', padding:'3px 0', flexShrink:0, textTransform:'uppercase' },
   arrowCol: { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'8px', width:'22px', flexShrink:0 },
-  scroll: { display:'flex', flexDirection:'column', gap:'3px', flex:1, overflowY:'auto' },
-  brain: { padding:'8px', borderRadius:'10px', border:'1px solid rgba(139,92,246,0.2)', background:'rgba(139,92,246,0.02)', transition:'all 0.5s', flexShrink:0 },
-  dbCard: { display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'6px', border:'1px solid rgba(16,185,129,0.15)', flexShrink:0, transition:'all 0.5s' },
+  scroll: { display:'flex', flexDirection:'column', gap:'4px', flex:1, overflowY:'auto' },
+  brain: { padding:'10px', borderRadius:'12px', border:'1px solid #D0D5DE', background:'#FFFFFF', boxShadow:'0 2px 6px rgba(0,0,0,0.06)', transition:'all 0.5s', flexShrink:0 },
+  dbCard: { display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'1px solid #D1FAE5', background:'#F0FDF4', flexShrink:0, transition:'all 0.5s' },
 };

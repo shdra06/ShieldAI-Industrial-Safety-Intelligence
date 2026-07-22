@@ -29,6 +29,10 @@ export class SCADAAgent {
     this.ewmaState = new Map();
     /** @type {Map<string, {sPlus: number, sMinus: number, mean: number, count: number, k: number, h: number}>} CUSUM state per sensor for abrupt shift detection. */
     this.cusumState = new Map();
+    /** @type {Map<string, string>} Tracks last logged severity per sensor to avoid spam */
+    this.previousSeverity = new Map();
+    /** @type {Map<string, number>} Tracks tick count since last message per sensor */
+    this.ticksSinceLastMsg = new Map();
 
     this.geminiAgent = new GeminiAgent({
       agentName: 'SCADA-AI',
@@ -118,36 +122,67 @@ Be specific about sensor IDs and values.`,
         }
       }
 
-      // ── Generate messages based on severity ────────────────────────
-      if (sensor.currentValue >= sensor.criticalThreshold) {
-        const msg = {
-          agent: 'SCADA',
-          severity: 'critical',
-          text: `${sensor.label} (${sensor.id}) at ${sensor.currentValue} ${sensor.unit} — EXCEEDS CRITICAL THRESHOLD (${sensor.criticalThreshold} ${sensor.unit}). Trend: ${trend.symbol} (${rateOfChange > 0 ? '+' : ''}${rateOfChange.toFixed(2)} ${sensor.unit}/tick)`,
-          timestamp: now,
-          sensorId: sensor.id,
-          zone: sensor.zoneId,
-        };
-        messages.push(msg);
-        alerts.push({ ...msg, type: 'critical_threshold' });
-      } else if (sensor.currentValue >= sensor.warningThreshold) {
-        messages.push({
-          agent: 'SCADA',
-          severity: 'warning',
-          text: `${sensor.label} (${sensor.id}) at ${sensor.currentValue} ${sensor.unit} — exceeds warning threshold (${sensor.warningThreshold} ${sensor.unit}). Trend: ${trend.symbol}`,
-          timestamp: now,
-          sensorId: sensor.id,
-          zone: sensor.zoneId,
-        });
-      } else if (trend.symbol === TREND_SYMBOLS.RISING_FAST && riskValue > 0.3) {
-        messages.push({
-          agent: 'SCADA',
-          severity: 'info',
-          text: `${sensor.label} (${sensor.id}) rising rapidly at ${sensor.currentValue} ${sensor.unit}. Rate: +${rateOfChange.toFixed(2)} ${sensor.unit}/tick. Monitor closely.`,
-          timestamp: now,
-          sensorId: sensor.id,
-          zone: sensor.zoneId,
-        });
+      // ── Smart message generation (only on state transitions) ─────
+      const currentSeverity = sensor.currentValue >= sensor.criticalThreshold ? 'critical'
+        : sensor.currentValue >= sensor.warningThreshold ? 'warning'
+        : (trend.symbol === TREND_SYMBOLS.RISING_FAST && riskValue > 0.3) ? 'rising' : 'normal';
+      const prevSeverity = this.previousSeverity.get(sensor.id) || 'normal';
+      const ticks = this.ticksSinceLastMsg.get(sensor.id) || 0;
+      this.ticksSinceLastMsg.set(sensor.id, ticks + 1);
+
+      // Log only on: severity transition, or periodic update every 10 ticks (~20s)
+      const isTransition = currentSeverity !== prevSeverity;
+      const isPeriodicUpdate = ticks >= 10 && currentSeverity !== 'normal';
+
+      if (isTransition || isPeriodicUpdate) {
+        this.previousSeverity.set(sensor.id, currentSeverity);
+        this.ticksSinceLastMsg.set(sensor.id, 0);
+
+        if (currentSeverity === 'critical') {
+          const msg = {
+            agent: 'SCADA',
+            severity: 'critical',
+            text: isTransition
+              ? `🚨 ${sensor.label} (${sensor.id}) ESCALATED to CRITICAL: ${sensor.currentValue} ${sensor.unit} (threshold: ${sensor.criticalThreshold} ${sensor.unit}). Rate: ${rateOfChange > 0 ? '+' : ''}${rateOfChange.toFixed(2)}/tick`
+              : `${sensor.label} (${sensor.id}) still critical at ${sensor.currentValue} ${sensor.unit}. Trend: ${trend.symbol}`,
+            timestamp: now,
+            sensorId: sensor.id,
+            zone: sensor.zoneId,
+          };
+          messages.push(msg);
+          alerts.push({ ...msg, type: 'critical_threshold' });
+        } else if (currentSeverity === 'warning') {
+          messages.push({
+            agent: 'SCADA',
+            severity: 'warning',
+            text: isTransition
+              ? (prevSeverity === 'critical'
+                ? `📉 ${sensor.label} (${sensor.id}) DE-ESCALATED to warning: ${sensor.currentValue} ${sensor.unit}. Still above ${sensor.warningThreshold}. Monitoring.`
+                : `⚠️ ${sensor.label} (${sensor.id}) crossed WARNING threshold: ${sensor.currentValue} ${sensor.unit} (limit: ${sensor.warningThreshold} ${sensor.unit}). Trend: ${trend.symbol}`)
+              : `${sensor.label} (${sensor.id}) holding at ${sensor.currentValue} ${sensor.unit}. Trend: ${trend.symbol}`,
+            timestamp: now,
+            sensorId: sensor.id,
+            zone: sensor.zoneId,
+          });
+        } else if (currentSeverity === 'rising') {
+          messages.push({
+            agent: 'SCADA',
+            severity: 'info',
+            text: `${sensor.label} (${sensor.id}) rising rapidly at ${sensor.currentValue} ${sensor.unit}. Rate: +${rateOfChange.toFixed(2)}/tick. Approaching warning range.`,
+            timestamp: now,
+            sensorId: sensor.id,
+            zone: sensor.zoneId,
+          });
+        } else if (currentSeverity === 'normal' && prevSeverity !== 'normal') {
+          messages.push({
+            agent: 'SCADA',
+            severity: 'info',
+            text: `✅ ${sensor.label} (${sensor.id}) returned to SAFE: ${sensor.currentValue} ${sensor.unit}. All clear.`,
+            timestamp: now,
+            sensorId: sensor.id,
+            zone: sensor.zoneId,
+          });
+        }
       }
 
       // ── Cascade Alert ──────────────────────────────────────────────
